@@ -1,0 +1,401 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  HR
+  LEGAL
+  MANAGER
+  EMPLOYEE
+  CONTRACTOR
+}
+
+enum Department {
+  GENERAL
+  ENGINEERING
+  HR
+  LEGAL
+  FINANCE
+  MARKETING
+  SALES
+  LEADERSHIP
+}
+
+enum CompanyStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  INDEXED
+  FAILED
+}
+
+enum DocumentCategory {
+  HR_POLICY
+  PRODUCT
+  TECHNICAL
+  LEGAL
+  TRAINING
+  OTHER
+}
+
+enum DocumentSensitivity {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  RESTRICTED
+}
+
+enum AiProvider {
+  OPENAI
+  HUGGINGFACE
+}
+
+enum FeedbackRating {
+  HELPFUL
+  NOT_HELPFUL
+}
+
+enum FeedbackReason {
+  INCORRECT
+  MISSING_INFORMATION
+  WRONG_SOURCE
+  OUTDATED
+  OTHER
+}
+
+enum AuditAction {
+  ASK
+  DOC_UPLOAD
+  DOC_INDEX
+  DOC_DELETE
+  DOC_DOWNLOAD
+  REGISTER
+  VERIFY_EMAIL
+  LOGIN
+  USER_CREATE
+  ROLE_CHANGE
+  RECLASSIFY
+  ACL_CHANGE
+  PASSWORD_CHANGE
+  PASSWORD_RESET
+  COMPANY_STATUS_CHANGE
+  GRAPH_TRAVERSE
+  FEEDBACK
+  CONVERSATION_DELETE
+}
+
+enum ConversationVisibility {
+  PRIVATE
+}
+
+model Company {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  status             CompanyStatus       @default(PENDING_VERIFICATION)
+  users              User[]
+  documents          Document[]
+  acls               DocumentACL[]
+  conversations      Conversation[]
+  messages           Message[]
+  auditLogs          AuditLog[]
+  feedback           AnswerFeedback[]
+  ingestionJobs      IngestionJob[]
+  suggestedQuestions SuggestedQuestion[]
+  graphStats         GraphStats?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  documentEntities   DocumentEntity[]
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String?
+  passwordHash        String?
+  emailVerifiedAt     DateTime?
+  mustChangePassword  Boolean              @default(false)
+  isActive            Boolean              @default(true)
+  companyId           String?
+  company             Company?             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  roles               UserRole[]
+  department          Department?
+  verificationCodes   VerificationCode[]
+  passwordResetTokens PasswordResetToken[]
+  conversations       Conversation[]
+  messages            Message[]
+  auditLogs           AuditLog[]
+  feedback            AnswerFeedback[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  uploadedDocuments   Document[]
+
+  @@index([companyId])
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role
+  companyId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, role])
+  @@index([companyId])
+}
+
+model RootAdmin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model VerificationCode {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Document {
+  id                 String              @id @default(cuid())
+  companyId          String
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title              String
+  originalName       String
+  mimeType           String
+  sizeBytes          Int
+  storagePath        String
+  category           DocumentCategory    @default(OTHER)
+  sensitivity        DocumentSensitivity @default(INTERNAL)
+  ownership          String? // entity name that owns the doc, e.g. "HR Department" (graph aid)
+  status             DocumentStatus      @default(UPLOADED)
+  failureReason      String?
+  classificationNote String?
+  pageCount          Int                 @default(0)
+  uploadedById       String?
+  uploadedBy         User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  acl                DocumentACL?
+  chunks             DocumentChunk[]
+  chunkCount         Int                 @default(0)
+  entityCount        Int                 @default(0)
+  relationshipCount  Int                 @default(0)
+  graphEntities      DocumentEntity[]
+  ingestedAt         DateTime? // when graph+vectors were last fully built
+  firstNameHint      String?
+  ingestionJobs      IngestionJob[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, category])
+}
+
+model DocumentACL {
+  id                 String              @id @default(cuid())
+  companyId          String
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentId         String?             @unique
+  document           Document?           @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkId            String?             @unique
+  chunk              DocumentChunk?      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  allowedRoles       Role[]              @default([])
+  allowedDepartments Department[]        @default([])
+  ownerId            String? // private document ownership (chat uploads / private docs)
+  sensitivity        DocumentSensitivity @default(INTERNAL)
+  // Fail-closed default: if a document has no ACL row, it stays admin-only.
+  updatedById        String?
+  updatedAt          DateTime            @default(now()) @updatedAt
+
+  @@index([companyId])
+}
+
+model DocumentChunk {
+  id               String           @id @default(cuid())
+  documentId       String
+  document         Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  companyId        String
+  index            Int
+  content          String
+  tokenCount       Int
+  section          String?
+  pageStart        Int?
+  pageEnd          Int?
+  chromaId         String?          @unique
+  acl              DocumentACL?
+  tokenCountHash   String?
+  embeddingVersion String?
+  graphEntities    DocumentEntity[]
+  createdAt        DateTime         @default(now())
+
+  @@index([companyId])
+  @@index([documentId, index])
+}
+
+model DocumentEntity {
+  id          String         @id @default(cuid())
+  companyId   String
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentId  String
+  document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkId     String?
+  chunk       DocumentChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  name        String
+  type        String // EntityType (validated against ontology)
+  description String?
+  confidence  Float
+  page        Int?
+  section     String?
+  sourceText  String?
+  graphNodeId String? // Neo4j node id the entity resolved to
+  resolved    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+
+  @@index([companyId, name])
+  @@index([documentId])
+}
+
+model Conversation {
+  id         String                 @id @default(cuid())
+  companyId  String
+  company    Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  visibility ConversationVisibility @default(PRIVATE)
+  messages   Message[]
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  @@index([companyId, userId, updatedAt])
+}
+
+model Message {
+  id             String          @id @default(cuid())
+  companyId      String
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant"
+  content        String
+  citations      Json?
+  graphEvidence  Json?
+  retrievalMeta  Json?
+  feedback       AnswerFeedback?
+  createdAt      DateTime        @default(now())
+  User           User?           @relation(fields: [userId], references: [id])
+  userId         String?
+
+  @@index([conversationId, createdAt])
+}
+
+model AnswerFeedback {
+  id        String          @id @default(cuid())
+  companyId String
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId String          @unique
+  message   Message         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  rating    FeedbackRating
+  reason    FeedbackReason?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([companyId, rating, createdAt])
+}
+
+model IngestionJob {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  documentId  String
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  status      String    @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+  stage       String? // extraction | chunk | embedding | entity | relationship | graph | vector | done
+  error       String?
+  progress    Int       @default(0) // 0-100
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([companyId, status])
+  @@index([documentId])
+}
+
+model SuggestedQuestion {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  question  String
+  rank      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  companyId String?
+  company   Company?    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    AuditAction
+  detail    Json?
+  ip        String?
+  requestId String?
+  createdAt DateTime    @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([action, createdAt])
+}
+
+model GraphStats {
+  id                    String   @id @default(cuid())
+  companyId             String   @unique
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entityCount           Int      @default(0)
+  relationshipCount     Int      @default(0)
+  documentCount         Int      @default(0)
+  orphanCount           Int      @default(0)
+  duplicateEntityCount  Int      @default(0)
+  avgConfidence         Float    @default(0)
+  failedExtractionCount Int      @default(0)
+  updatedAt             DateTime @default(now()) @updatedAt
+
+  @@index([companyId])
+}

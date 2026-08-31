@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-950 text-slate-200 antialiased;
+}
+
+.markdown-body {
+  @apply text-[15px] leading-7 text-slate-200;
+}
+
+.markdown-body p {
+  @apply mb-3;
+}
+
+.markdown-body ul {
+  @apply mb-3 list-disc pl-5;
+}
+
+.markdown-body ol {
+  @apply mb-3 list-decimal pl-5;
+}
+
+.markdown-body strong {
+  @apply font-semibold text-slate-100;
+}
+
+.markdown-body code {
+  @apply rounded bg-slate-800 px-1.5 py-0.5 text-[13px] text-emerald-300;
+}
+
+.markdown-body pre {
+  @apply mb-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-[13px];
+}
+
+.markdown-body a {
+  @apply text-indigo-400 underline decoration-indigo-500/40 underline-offset-2;
+}
+
+.cite-link {
+  @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded bg-indigo-500/20 px-1 align-middle text-[11px] font-semibold text-indigo-300 transition hover:bg-indigo-500/40 hover:text-white;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-700;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}

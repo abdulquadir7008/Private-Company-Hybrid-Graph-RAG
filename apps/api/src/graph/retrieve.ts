@@ -68,12 +68,15 @@ export async function traverseAuthorizedGraph(input: TraversalInput): Promise<Gr
     // preserve the stored source->target orientation for evidence text, while
     // `neighbor` advances the BFS frontier.
 const rels = await runQuery<{ r: Record<string, unknown>; relType: string; s: Record<string, unknown>; t: Record<string, unknown>; neighbor: Record<string, unknown> }>(
+      // startNode/endNode may not be called inside ORDER BY (Neo4j rejects it);
+      // compute the incoming-edge priority in RETURN and order by the alias.
       `MATCH (a:Entity {tenantId: $tenantId})-[r]-(b:Entity {tenantId: $tenantId})
        WHERE a.name IN $current AND ${authPredicate("a")} AND ${authPredicate("b")}
        RETURN properties(r) AS r, type(r) AS relType,
               properties(startNode(r)) AS s, properties(endNode(r)) AS t,
-              properties(b) AS neighbor
-       ORDER BY CASE WHEN endNode(r).name IN $current THEN 0 ELSE 1 END, r.confidence DESC
+              properties(b) AS neighbor,
+              CASE WHEN startNode(r).name = b.name THEN 0 ELSE 1 END AS incoming
+       ORDER BY incoming, r.confidence DESC
        LIMIT toInteger($limit)`,
       { tenantId: input.tenantId, authDocs: input.authDocs, current, limit }
     );

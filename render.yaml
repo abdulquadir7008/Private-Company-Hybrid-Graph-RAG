@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: graphrag-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    # Ensure prisma migrations run on deploy via the Dockerfile CMD
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USERNAME
+        value: neo4j
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: NEO4J_DATABASE
+        value: neo4j
+      - key: CHROMA_URL
+        sync: false
+      - key: CHROMA_COLLECTION
+        value: graphrag_chunks
+      - key: AI_PROVIDER
+        value: openai
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: ENABLE_DEMO_SETUP
+        value: "true"
+      - key: MAX_VECTOR_RESULTS
+        value: "20"
+      - key: MAX_GRAPH_DEPTH
+        value: "3"
+      - key: MAX_GRAPH_NODES
+        value: "50"
+      - key: TOP_K_RERANKED
+        value: "10"
+      - key: OUTBOUND_EMAIL
+        value: console
+      - key: WEB_URL
+        sync: false
+    healthCheckPath: /api/health
+    autoDeploy: true

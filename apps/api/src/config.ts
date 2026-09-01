@@ -5,7 +5,7 @@ dotenv.config();
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  API_PORT: z.coerce.number().default(4000),
+  API_PORT: z.coerce.number().default(parseInt(process.env.PORT || "4000", 10)),
   WEB_URL: z.string().default("http://localhost:3000"),
   UPLOAD_DIR: z.string().default("./uploads"),
 

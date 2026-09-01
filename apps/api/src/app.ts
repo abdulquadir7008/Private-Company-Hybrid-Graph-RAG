@@ -14,7 +14,18 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: config.WEB_URL || true,
+      origin: (origin, cb) => {
+        // Allow requests with no Origin (server-to-server, curl) and known WEB_URL.
+        const allowed = (config.WEB_URL || "")
+          .split(",")
+          .map((u) => u.trim().replace(/\/+$/, ""))
+          .filter(Boolean);
+        if (!origin || allowed.length === 0 || allowed.includes(origin.replace(/\/+$/, ""))) {
+          cb(null, true);
+        } else {
+          cb(null, false);
+        }
+      },
       credentials: true
     })
   );

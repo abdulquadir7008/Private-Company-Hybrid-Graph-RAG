@@ -151,24 +151,61 @@ graphRoutes.post(
   })
 );
 
+/** Authorized relationship as exposed to the Graph Explorer (full-graph mode). */
+export interface GraphRelationshipView {
+  rid: string;
+  type: string;
+  source: { id: string; name: string; type: string };
+  target: { id: string; name: string; type: string };
+  confidence: number | null;
+  sources: string[];
+}
+
+interface RelationshipRow {
+  rid: string | null;
+  type: string | null;
+  source: Record<string, unknown>;
+  target: Record<string, unknown>;
+  confidence: number | null;
+  sources: unknown;
+}
+
+function nodeView(props: Record<string, unknown>): { id: string; name: string; type: string } {
+  return {
+    id: props.id != null ? String(props.id) : "",
+    name: props.name != null ? String(props.name) : "",
+    type: props.type != null ? String(props.type) : ""
+  };
+}
+
+export function toGraphRelationshipView(row: RelationshipRow): GraphRelationshipView {
+  return {
+    rid: String(row.rid ?? ""),
+    type: String(row.type ?? ""),
+    source: nodeView(row.source ?? {}),
+    target: nodeView(row.target ?? {}),
+    confidence: row.confidence != null ? Number(row.confidence) : null,
+    sources: Array.isArray(row.sources) ? row.sources.map(String) : []
+  };
+}
+
 graphRoutes.get(
   "/relationships",
   requireAuth,
   asyncHandler(async (req, res) => {
     const p = requireCompanyPrincipal(req);
     const authDocs = Array.from(await authorizedDocumentIds(p));
-    const link = typeof req.query.link === "string" ? (req.query.link as never) : undefined;
-    void link;
-    const result: unknown = await runQuery(
+    const rows = await runQuery<RelationshipRow>(
       `MATCH (s:Entity {tenantId: $tenantId})-[r]->(t:Entity {tenantId: $tenantId})
        WHERE s.sourceDocuments IS NOT NULL AND all(d IN s.sourceDocuments WHERE d IN $authDocs)
          AND t.sourceDocuments IS NOT NULL AND all(d IN t.sourceDocuments WHERE d IN $authDocs)
-       RETURN r.rid AS rid, type(r) AS type, s.name AS sourceName, s.type AS sourceType,
-              t.name AS targetName, t.type AS targetType, r.confidence AS confidence, r.sources AS sources
+       RETURN r.rid AS rid, type(r) AS type, properties(s) AS source, properties(t) AS target,
+              r.confidence AS confidence, r.sources AS sources
        LIMIT 200`,
       { tenantId: p.companyId, authDocs }
     );
-    res.json({ items: result });
+    const items: GraphRelationshipView[] = rows.map(toGraphRelationshipView);
+    res.json({ items });
   })
 );
 

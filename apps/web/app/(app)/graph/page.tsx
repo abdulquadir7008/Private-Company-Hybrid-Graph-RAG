@@ -66,16 +66,16 @@ export default function GraphPage() {
     setError(null);
     setSelected(null);
     try {
-      const rels = await apiFetch<{ items: Record<string, unknown>[] }>("/graph/relationships", { token: auth.token });
+      const rels = await apiFetch<{ items: GraphRelationship[] }>("/graph/relationships", { token: auth.token });
       const seen = new Map<string, CanvasNode>();
       const edges: CanvasEdge[] = [];
-      const items = rels.items.map((r) => r as unknown as GraphRelationship);
+      const items = rels.items;
       for (const r of items) {
         const s = r.source;
         const t = r.target;
-        if (s?.name && !seen.has(s.name)) seen.set(s.name, { id: s.id ?? s.name, name: s.name, type: (s.type ?? "Topic") as string });
-        if (t?.name && !seen.has(t.name)) seen.set(t.name, { id: t.id ?? t.name, name: t.name, type: (t.type ?? "Topic") as string });
-        edges.push({ id: r.rid, source: s.id ?? s.name, target: t.id ?? t.name, type: r.type });
+        if (s?.name && !seen.has(s.name)) seen.set(s.name, { id: s.id || s.name, name: s.name, type: (s.type ?? "Topic") as string });
+        if (t?.name && !seen.has(t.name)) seen.set(t.name, { id: t.id || t.name, name: t.name, type: (t.type ?? "Topic") as string });
+        edges.push({ id: r.rid, source: s.id || s.name, target: t.id || t.name, type: r.type });
         if (seen.size >= 120) break;
       }
       setFullGraph({ nodes: Array.from(seen.values()), edges });

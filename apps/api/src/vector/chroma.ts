@@ -29,7 +29,15 @@ export function sanitizeMetadata(meta: Record<string, string | number | boolean 
 let collection: chromadb.Collection | null = null;
 
 function client(): chromadb.ChromaClient {
-  return new chromadb.ChromaClient({ path: config.CHROMA_URL });
+  const opts: chromadb.ChromaClientParams = { path: config.CHROMA_URL };
+  if (config.CHROMA_API_KEY) {
+    opts.auth = {
+      provider: "token",
+      credentials: config.CHROMA_API_KEY,
+      tokenHeaderType: "X_CHROMA_TOKEN"
+    };
+  }
+  return new chromadb.ChromaClient(opts);
 }
 
 export async function getCollection(): Promise<chromadb.Collection> {

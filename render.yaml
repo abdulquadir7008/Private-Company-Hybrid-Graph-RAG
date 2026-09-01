@@ -22,6 +22,8 @@ services:
         sync: false
       - key: CHROMA_COLLECTION
         value: graphrag_chunks
+      - key: CHROMA_API_KEY
+        sync: false
       - key: AI_PROVIDER
         value: openai
       - key: OPENAI_API_KEY

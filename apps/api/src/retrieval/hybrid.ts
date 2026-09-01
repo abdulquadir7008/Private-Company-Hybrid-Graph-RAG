@@ -135,9 +135,10 @@ export async function hybridRetrieve(opts: {
       sourceType: "keyword",
       documentId: kd.documentId,
       documentTitle: kd.title,
+      chunkId: kd.chunkId ?? undefined,
       relevanceScore: kd.score,
-      text: kd.title,
-      provenance: { tenantId, documentId: kd.documentId },
+      text: kd.chunkText ?? kd.title,
+      provenance: { tenantId, documentId: kd.documentId, chunkId: kd.chunkId ?? undefined },
       aclStatus: "authorized"
     });
   }

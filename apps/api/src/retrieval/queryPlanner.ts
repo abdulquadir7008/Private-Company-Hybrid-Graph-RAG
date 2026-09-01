@@ -115,9 +115,18 @@ export function extractEntityNameCandidates(question: string): string[] {
   return Array.from(new Set(candidates.map((c) => c.trim()).filter((c) => c.length >= 2)));
 }
 
+export interface KeywordHit {
+  documentId: string;
+  title: string;
+  score: number;
+  chunkId: string | null;
+  chunkText: string | null;
+}
+
 /** Keyword search over document titles + chunk sections in PostgreSQL. */
-export async function keywordDocuments(principal: Principal, terms: string[]): Promise<{ documentId: string; title: string; score: number }[]> {
+export async function keywordDocuments(principal: Principal, terms: string[]): Promise<KeywordHit[]> {
   if (!principal.companyId || terms.length === 0) return [];
+  const lower = terms.map((t) => t.toLowerCase());
   const rows = await prisma.document.findMany({
     where: {
       companyId: principal.companyId,
@@ -126,7 +135,81 @@ export async function keywordDocuments(principal: Principal, terms: string[]): P
     },
     select: { id: true, title: true }
   });
-  return rows.map((r) => ({ documentId: r.id, title: r.title, score: 1 }));
+
+  const scored: KeywordHit[] = [];
+  for (const row of rows) {
+    const best = await bestMatchingChunk(row.id, lower);
+    scored.push({
+      documentId: row.id,
+      title: row.title,
+      score: best ? 1 + Math.min(10, best.hits) : 1,
+      chunkId: best?.id ?? null,
+      chunkText: best?.content ?? null
+    });
+  }
+
+  // No title matched: rescue by searching chunk content so content-only
+  // questions (e.g. ownership clauses inside policies) still resolve.
+  if (scored.length === 0) {
+    const chunks = await prisma.documentChunk.findMany({
+      where: {
+        companyId: principal.companyId,
+        document: { status: "INDEXED" },
+        OR: lower.map((t) => ({ content: { contains: t, mode: "insensitive" } }))
+      },
+      select: { id: true, content: true, documentId: true, document: { select: { title: true } } },
+      orderBy: { index: "asc" },
+      take: 30
+    });
+    const byDoc = new Map<string, { chunk: { id: string; content: string; documentId: string; title: string }; hits: number }>();
+    for (const chunk of chunks) {
+      const hits = termOverlap(chunk.content, lower);
+      if (hits === 0) continue;
+      const prior = byDoc.get(chunk.documentId);
+      if (!prior || hits > prior.hits) {
+        byDoc.set(chunk.documentId, { chunk: { id: chunk.id, content: chunk.content, documentId: chunk.documentId, title: chunk.document.title }, hits });
+      }
+    }
+    for (const hit of byDoc.values()) {
+      scored.push({
+        documentId: hit.chunk.documentId,
+        title: hit.chunk.title,
+        score: 1 + Math.min(10, hit.hits),
+        chunkId: hit.chunk.id,
+        chunkText: hit.chunk.content
+      });
+    }
+  }
+
+  return scored.sort((a, b) => b.score - a.score);
+}
+
+async function bestMatchingChunk(documentId: string, terms: string[]): Promise<{ id: string; content: string; hits: number } | null> {
+  const chunks = await prisma.documentChunk.findMany({
+    where: { documentId, OR: terms.map((t) => ({ content: { contains: t, mode: "insensitive" } })) },
+    select: { id: true, content: true },
+    orderBy: { index: "asc" },
+    take: 20
+  });
+  let best: { id: string; content: string; hits: number } | null = null;
+  for (const chunk of chunks) {
+    const hits = termOverlap(chunk.content, terms);
+    if (hits > (best?.hits ?? 0)) {
+      best = { id: chunk.id, content: chunk.content, hits };
+    }
+  }
+  return best;
+}
+
+function termOverlap(text: string, terms: string[]): number {
+  const lower = text.toLowerCase();
+  let hits = 0;
+  for (const t of terms) {
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = lower.match(new RegExp(escaped, "g"));
+    if (m) hits += m.length;
+  }
+  return hits;
 }
 
 export function buildPlan(

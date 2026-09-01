@@ -72,7 +72,9 @@ const rels = await runQuery<{ r: Record<string, unknown>; relType: string; s: Re
        WHERE a.name IN $current AND ${authPredicate("a")} AND ${authPredicate("b")}
        RETURN properties(r) AS r, type(r) AS relType,
               properties(startNode(r)) AS s, properties(endNode(r)) AS t,
-              properties(b) AS neighbor LIMIT toInteger($limit)`,
+              properties(b) AS neighbor
+       ORDER BY CASE WHEN endNode(r).name IN $current THEN 0 ELSE 1 END, r.confidence DESC
+       LIMIT toInteger($limit)`,
       { tenantId: input.tenantId, authDocs: input.authDocs, current, limit }
     );
 

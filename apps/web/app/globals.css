@@ -3,15 +3,52 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
 }
 
 body {
-  @apply bg-ink-950 text-slate-200 antialiased;
+  @apply bg-base text-slate-800 antialiased;
+  background-image: var(--app-bg, none);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Focus ring used across the app for consistent, accessible focus states. */
+:focus-visible {
+  outline: 2px solid theme("colors.brand.DEFAULT");
+  outline-offset: 2px;
+}
+
+/* Thin branded scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-rose-200;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-rose-300;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
 }
 
 .markdown-body {
-  @apply text-[15px] leading-7 text-slate-200;
+  @apply text-[15px] leading-7 text-slate-700;
 }
 
 .markdown-body p {
@@ -27,34 +64,71 @@ body {
 }
 
 .markdown-body strong {
-  @apply font-semibold text-slate-100;
+  @apply font-semibold text-slate-900;
 }
 
 .markdown-body code {
-  @apply rounded bg-slate-800 px-1.5 py-0.5 text-[13px] text-emerald-300;
+  @apply rounded bg-rose-50 px-1.5 py-0.5 text-[13px] text-rose-600;
 }
 
 .markdown-body pre {
-  @apply mb-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-[13px];
+  @apply mb-3 overflow-x-auto rounded-lg bg-rose-50 p-3 text-[13px];
 }
 
 .markdown-body a {
   @apply text-indigo-400 underline decoration-indigo-500/40 underline-offset-2;
 }
 
+button, input, select, textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(244, 63, 117, 0.18);
+  color: #9f1239;
+}
+
 .cite-link {
-  @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded bg-indigo-500/20 px-1 align-middle text-[11px] font-semibold text-indigo-300 transition hover:bg-indigo-500/40 hover:text-white;
+  @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded bg-rose-100 px-1 align-middle text-[11px] font-semibold text-rose-600 transition hover:bg-rose-500 hover:text-white;
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+/* Light-brand contrast bridge for existing page content. Keeping these tokens
+   centralized lets all functional screens inherit the new visual system. */
+[class~="text-slate-100"], [class~="text-slate-200"] { color: #172033 !important; }
+[class~="text-slate-300"] { color: #334155 !important; }
+[class~="text-slate-400"] { color: #64748b !important; }
+[class~="text-slate-500"] { color: #7c8496 !important; }
+[class~="text-slate-600"] { color: #94a3b8 !important; }
+[class~="text-indigo-300"], [class~="text-indigo-400"] { color: #7c3aed !important; }
+
+[class*="border-white/"] { border-color: rgba(244, 63, 94, 0.12) !important; }
+[class*="bg-white/"] { background-color: rgba(255, 255, 255, 0.72); }
+
+/* The graph explorer uses an airy, rose-and-violet workspace inspired by the
+   product reference. These scoped rules deliberately leave the rest of the
+   application theme untouched. */
+.graph-blossom .bg-base-900,
+.graph-blossom .bg-base-900\/60,
+.graph-blossom .bg-base-900\/70,
+.graph-blossom .bg-base-900\/80,
+.graph-blossom .bg-base-950,
+.graph-blossom .bg-surface,
+.graph-blossom .bg-surface\/80 {
+  background-color: rgba(255, 255, 255, 0.88) !important;
 }
 
-::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-slate-700;
+.graph-blossom .border-white\/8,
+.graph-blossom .border-white\/10,
+.graph-blossom .ring-white\/5 {
+  border-color: rgba(244, 63, 94, 0.12) !important;
 }
 
-::-webkit-scrollbar-track {
-  @apply bg-transparent;
+.graph-blossom .text-slate-100,
+.graph-blossom .text-slate-200 {
+  color: #172033 !important;
 }
+
+.graph-blossom .text-slate-300 { color: #334155 !important; }
+.graph-blossom .text-slate-400 { color: #64748b !important; }
+.graph-blossom .text-slate-500 { color: #7c8496 !important; }
+.graph-blossom .text-slate-600 { color: #a0a6b5 !important; }

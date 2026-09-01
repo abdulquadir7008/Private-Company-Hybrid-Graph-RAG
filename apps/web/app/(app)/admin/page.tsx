@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import type { AdminGraph, AdminUser, AuditEntry, DocumentSummary, FeedbackSummary, IngestionJob, Paginated, QueryPlan } from "@/lib/types";
-import { Alert, Badge, Button, Card, EmptyState, Input, Label, Select, Spinner, Stat, formatDate, statusTone } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, Input, Label, PageHeader, Select, Spinner, Stat, formatDate, statusTone } from "@/components/ui";
 
 type Tab = "overview" | "users" | "documents" | "ingestion" | "feedback" | "audit" | "debug";
 
@@ -26,20 +26,22 @@ export default function AdminPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Admin</h1>
-          <p className="mt-1 text-sm text-slate-500">Operational view of your knowledge graph workspace.</p>
-        </div>
-        {!auth.isAdmin && <Alert tone="amber">Admin role required for this view.</Alert>}
-      </div>
+      <PageHeader
+        title="Admin"
+        subtitle="Operational view of your knowledge graph workspace."
+        actions={!auth.isAdmin ? <Alert tone="amber">Admin role required for this view.</Alert> : undefined}
+      />
 
       <div className="mb-6 flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-3 py-1.5 text-sm transition ${tab === t.key ? "bg-indigo-600 text-white" : "bg-slate-800 text-slate-400 hover:text-slate-200"}`}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              tab === t.key
+                ? "bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/30"
+                : "border border-white/10 bg-base-900/60 text-slate-400 hover:text-slate-200"
+            }`}
           >
             {t.label}
           </button>
@@ -181,7 +183,7 @@ function UsersTab({ onError }: { onError: (e: string) => void }) {
               <button
                 key={r}
                 onClick={() => setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))}
-                className={`rounded-md px-2 py-0.5 text-[11px] ${roles.includes(r) ? "bg-indigo-500/30 text-indigo-200" : "bg-slate-800 text-slate-500"}`}
+                className={`rounded-md px-2 py-0.5 text-[11px] ${roles.includes(r) ? "bg-indigo-500/30 text-indigo-200" : "bg-white/5 text-slate-500"}`}
               >
                 {r}
               </button>
@@ -195,7 +197,7 @@ function UsersTab({ onError }: { onError: (e: string) => void }) {
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-800 text-xs uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-500">
               <th className="py-2 pr-3">Name</th>
               <th className="py-2 pr-3">Email</th>
               <th className="py-2 pr-3">Roles</th>
@@ -206,7 +208,7 @@ function UsersTab({ onError }: { onError: (e: string) => void }) {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b border-slate-800/60">
+              <tr key={u.id} className="border-b border-white/5">
                 <td className="py-2 pr-3 text-slate-200">{u.name ?? "—"}</td>
                 <td className="py-2 pr-3 text-slate-400">{u.email}</td>
                 <td className="py-2 pr-3">
@@ -254,7 +256,7 @@ function AdminDocsTab({ onError }: { onError: (e: string) => void }) {
     <Card>
       <div className="space-y-2">
         {docs.map((d) => (
-          <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2">
+          <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg bg-base-900/60 px-3 py-2">
             <div className="min-w-0">
               <div className="truncate text-sm text-slate-200">{d.title}</div>
               <div className="text-[11px] text-slate-500">
@@ -297,7 +299,7 @@ function IngestionTab({ onError }: { onError: (e: string) => void }) {
       <div className="space-y-2">
         {data.jobs.length === 0 && <p className="text-sm text-slate-500">No ingestion jobs yet.</p>}
         {data.jobs.map((j) => (
-          <div key={j.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-900/40 px-3 py-2">
+          <div key={j.id} className="flex items-center justify-between gap-3 rounded-lg bg-base-900/60 px-3 py-2">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm text-slate-200">{j.document.title}</span>
@@ -399,7 +401,7 @@ function AuditTab({ onError }: { onError: (e: string) => void }) {
       ) : (
         <div className="max-h-[600px] space-y-1.5 overflow-y-auto">
           {entries.map((e) => (
-            <div key={e.id} className="flex items-center gap-3 rounded-lg bg-slate-900/40 px-3 py-1.5 text-xs">
+            <div key={e.id} className="flex items-center gap-3 rounded-lg bg-base-900/60 px-3 py-1.5 text-xs">
               <Badge tone="slate">{e.action}</Badge>
               <span className="truncate text-slate-400">{e.userId}</span>
               <span className="ml-auto shrink-0 text-slate-600">{formatDate(e.createdAt)}</span>

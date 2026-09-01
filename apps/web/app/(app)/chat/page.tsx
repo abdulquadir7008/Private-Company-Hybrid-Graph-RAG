@@ -128,7 +128,7 @@ export default function ChatPage() {
   if (!auth.token) return null;
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full">
       <ChatSidebar
         conversations={conversations}
         activeId={activeId}
@@ -170,6 +170,7 @@ export default function ChatPage() {
                       citations={m.citations}
                       graphEvidence={m.graphEvidence}
                       messageId={m.id}
+                      token={auth.token}
                       createdAt={m.createdAt}
                       grounded={typeof (m.retrievalMeta as { grounded?: boolean } | null)?.grounded === "boolean" ? (m.retrievalMeta as { grounded?: boolean }).grounded : undefined}
                       confidence={
@@ -194,43 +195,45 @@ export default function ChatPage() {
           <div className="mx-auto max-w-3xl px-6 pb-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs uppercase tracking-wide text-slate-600">Try:</span>
-              {suggested.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => void askSuggested(s)}
-                  className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 transition hover:border-indigo-500 hover:text-white"
-                >
-                  {s}
-                </button>
-              ))}
+                  {suggested.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => void askSuggested(s)}
+                      className="rounded-full border border-white/10 bg-base-900/70 px-3 py-1.5 text-xs text-slate-300 transition hover:border-indigo-500 hover:text-white"
+                    >
+                      {s}
+                    </button>
+                  ))}
             </div>
           </div>
         )}
 
-        <div className="border-t border-slate-800 bg-ink-950 p-4">
+        <div className="border-t border-white/8 bg-base-900/60 p-4 backdrop-blur-md">
           <div className="mx-auto max-w-3xl">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-              rows={2}
-              placeholder="Ask about people, policies, projects… (Enter to send, Shift+Enter for newline)"
-              className="w-full resize-none rounded-xl border border-slate-800 bg-ink-900 px-4 py-3 text-sm text-slate-200 outline-none placeholder:text-slate-600 focus:border-indigo-500"
-            />
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-[11px] text-slate-600">Answers are grounded in your authorized documents.</span>
+            <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-base-900 px-3 py-2 transition focus-within:border-brand">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                rows={2}
+                placeholder="Ask about people, policies, projects… (Enter to send, Shift+Enter for newline)"
+                className="w-full resize-none bg-transparent px-1 py-1.5 text-sm text-slate-200 outline-none placeholder:text-slate-600"
+              />
               <button
                 onClick={() => void send()}
                 disabled={sending || !input.trim()}
-                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mb-0.5 rounded-lg bg-gradient-to-b from-pink-500 to-rose-500 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-rose-200 transition hover:from-pink-400 hover:to-rose-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {sending ? "Working…" : "Send →"}
+                {sending ? "Working…" : "Send"}
               </button>
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[11px] text-slate-600">Answers are grounded in your authorized documents.</span>
             </div>
           </div>
         </div>

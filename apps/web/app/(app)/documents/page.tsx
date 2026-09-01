@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import type { DocumentSummary, Paginated } from "@/lib/types";
-import { Alert, Badge, Button, Card, EmptyState, formatBytes, formatDate, Input, Label, Select, Spinner, statusTone } from "@/components/ui";
+import { Alert, Badge, Button, Card, EmptyState, formatBytes, formatDate, Input, Label, PageHeader, Select, Spinner, statusTone } from "@/components/ui";
 
 const CATEGORIES = ["HR_POLICY", "PRODUCT", "TECHNICAL", "LEGAL", "TRAINING", "OTHER"];
 const ROLES = ["ADMIN", "HR", "LEGAL", "MANAGER", "EMPLOYEE", "CONTRACTOR"];
@@ -34,6 +34,18 @@ export default function DocumentsPage() {
   const [aclDraft, setAclDraft] = useState<Record<string, AclDraft>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [documentQuery, setDocumentQuery] = useState("");
+  const [sensitivityFilter, setSensitivityFilter] = useState("ALL");
+
+  const visibleDocs = useMemo(() => {
+    const query = documentQuery.trim().toLowerCase();
+    return docs.filter((doc) => {
+      const matchesQuery = !query || [doc.title, doc.category, doc.status, doc.sensitivity, doc.uploadedBy?.email]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(query));
+      return matchesQuery && (sensitivityFilter === "ALL" || doc.sensitivity === sensitivityFilter);
+    });
+  }, [docs, documentQuery, sensitivityFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,11 +139,23 @@ export default function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <div className="mb-6 flex items-end justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Documents</h1>
-          <p className="mt-1 text-sm text-slate-500">Upload and classify your company documents. Access control is enforced per document.</p>
+      <PageHeader
+        title="Documents"
+        subtitle="Upload and classify your company documents. Access control is enforced per document."
+      />
+
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <Input value={documentQuery} onChange={(e) => setDocumentQuery(e.target.value)} className="pl-9" placeholder="Search documents, categories, or access status…" aria-label="Search documents" />
         </div>
+        <Select value={sensitivityFilter} onChange={(e) => setSensitivityFilter(e.target.value)} className="sm:w-44" aria-label="Filter by sensitivity">
+          <option value="ALL">All access levels</option>
+          {SENSITIVITY.map((level) => <option key={level} value={level}>{level}</option>)}
+        </Select>
       </div>
 
       {error && (
@@ -148,7 +172,7 @@ export default function DocumentsPage() {
               type="file"
               accept=".pdf,.docx,.doc,.txt,.md,.csv,.json"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="w-full rounded-lg border border-slate-800 bg-ink-950 p-2 text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-sm file:text-slate-200"
+              className="w-full rounded-lg border border-white/10 bg-base-950 p-2 text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-sm file:text-slate-200"
             />
           </div>
           <div>
@@ -177,12 +201,18 @@ export default function DocumentsPage() {
         <Spinner label="Loading documents…" />
       ) : docs.length === 0 ? (
         <EmptyState icon="📄" title="No documents yet" hint="Upload your first document to start building the knowledge graph." />
+      ) : visibleDocs.length === 0 ? (
+        <EmptyState icon="⌕" title="No matching documents" hint="Try a different name, category, or access-level filter." />
       ) : (
         <div className="space-y-3">
-          {docs.map((d) => {
+          <div className="flex items-center justify-between px-1 text-xs text-slate-500">
+            <span>{visibleDocs.length} of {docs.length} documents</span>
+            {(documentQuery || sensitivityFilter !== "ALL") && <button onClick={() => { setDocumentQuery(""); setSensitivityFilter("ALL"); }} className="text-indigo-300 hover:text-indigo-200">Clear filters</button>}
+          </div>
+          {visibleDocs.map((d) => {
             const draft = aclDraft[d.id] ?? { allowedRoles: d.acl?.allowedRoles ?? [], allowedDepartments: d.acl?.allowedDepartments ?? [], sensitivity: d.acl?.sensitivity ?? "INTERNAL" };
             return (
-              <div key={d.id} className="rounded-xl border border-slate-800 bg-ink-900 p-4">
+              <div key={d.id} className="rounded-xl border border-white/10 bg-surface/70 p-4 backdrop-blur-sm">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -226,7 +256,7 @@ export default function DocumentsPage() {
                 </div>
 
                 {admin && (
-                  <div className="mt-4 border-t border-slate-800 pt-3">
+                  <div className="mt-4 border-t border-white/10 pt-3">
                     <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Classify access (admin)</div>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                       <div>
@@ -236,7 +266,7 @@ export default function DocumentsPage() {
                             <button
                               key={r}
                               onClick={() => toggleRole(d.id, r)}
-                              className={`rounded-md px-2 py-0.5 text-[11px] transition ${draft.allowedRoles.includes(r) ? "bg-indigo-500/30 text-indigo-200" : "bg-slate-800 text-slate-500 hover:text-slate-300"}`}
+                              className={`rounded-md px-2 py-0.5 text-[11px] transition ${draft.allowedRoles.includes(r) ? "bg-indigo-500/30 text-indigo-200" : "bg-white/5 text-slate-500 hover:text-slate-300"}`}
                             >
                               {r}
                             </button>
@@ -250,7 +280,7 @@ export default function DocumentsPage() {
                             <button
                               key={dep}
                               onClick={() => toggleDept(d.id, dep)}
-                              className={`rounded-md px-2 py-0.5 text-[11px] transition ${draft.allowedDepartments.includes(dep) ? "bg-cyan-500/30 text-cyan-200" : "bg-slate-800 text-slate-500 hover:text-slate-300"}`}
+                              className={`rounded-md px-2 py-0.5 text-[11px] transition ${draft.allowedDepartments.includes(dep) ? "bg-cyan-500/30 text-cyan-200" : "bg-white/5 text-slate-500 hover:text-slate-300"}`}
                             >
                               {dep}
                             </button>

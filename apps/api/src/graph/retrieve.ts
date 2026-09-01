@@ -44,7 +44,7 @@ export async function traverseAuthorizedGraph(input: TraversalInput): Promise<Gr
   const limit = input.limit ?? 50;
 
   const relFilter = input.allowedRelationships?.length
-    ? input.allowedRelationships.map((t) => `type(r1) = '${assertRelationshipType(t)}'`).join(" OR ")
+    ? input.allowedRelationships.map((t) => `type(r) = '${assertRelationshipType(t)}'`).join(" OR ")
     : null;
 
   const relClause =
@@ -62,10 +62,17 @@ export async function traverseAuthorizedGraph(input: TraversalInput): Promise<Gr
   for (let hop = 0; hop < depth; hop++) {
     const current = [...currentNames];
     if (current.length === 0) break;
-const rels = await runQuery<{ r: Record<string, unknown>; relType: string; s: Record<string, unknown>; t: Record<string, unknown> }>(
-      `MATCH (s:Entity {tenantId: $tenantId})-[r]->(t:Entity {tenantId: $tenantId})
-       WHERE s.name IN $current AND ${authPredicate("s")} AND ${authPredicate("t")}
-       RETURN properties(r) AS r, type(r) AS relType, properties(s) AS s, properties(t) AS t LIMIT toInteger($limit)`,
+    // Traverse both edge directions: ownership/management edges commonly point
+    // INTO the entity a question starts from (e.g. "HR Department OWNS Remote
+    // Work Policy" when the question starts at the policy). startNode/endNode
+    // preserve the stored source->target orientation for evidence text, while
+    // `neighbor` advances the BFS frontier.
+const rels = await runQuery<{ r: Record<string, unknown>; relType: string; s: Record<string, unknown>; t: Record<string, unknown>; neighbor: Record<string, unknown> }>(
+      `MATCH (a:Entity {tenantId: $tenantId})-[r]-(b:Entity {tenantId: $tenantId})
+       WHERE a.name IN $current AND ${authPredicate("a")} AND ${authPredicate("b")}
+       RETURN properties(r) AS r, type(r) AS relType,
+              properties(startNode(r)) AS s, properties(endNode(r)) AS t,
+              properties(b) AS neighbor LIMIT toInteger($limit)`,
       { tenantId: input.tenantId, authDocs: input.authDocs, current, limit }
     );
 
@@ -97,9 +104,10 @@ const rels = await runQuery<{ r: Record<string, unknown>; relType: string; s: Re
           page: row.r.page != null ? Number(row.r.page) : null
         });
       }
-      if (!seenNodeIds.has(t.id)) {
-        seenNodeIds.add(t.id);
-        next.push(t.name);
+      const nb = rowToEntity(row.neighbor as Record<string, unknown>);
+      if (nb.name && !seenNodeIds.has(nb.id)) {
+        seenNodeIds.add(nb.id);
+        next.push(nb.name);
       }
     }
     currentNames = next;

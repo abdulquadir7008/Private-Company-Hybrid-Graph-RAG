@@ -25,7 +25,7 @@ services:
       - key: CHROMA_API_KEY
         sync: false
       - key: AI_PROVIDER
-        value: openai
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_CHAT_MODEL
@@ -34,6 +34,10 @@ services:
         value: text-embedding-3-small
       - key: HUGGINGFACE_API_KEY
         sync: false
+      - key: HUGGINGFACE_CHAT_MODEL
+        value: meta-llama/Llama-3.3-70B-Instruct
+      - key: HUGGINGFACE_EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRES_IN

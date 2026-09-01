@@ -12,7 +12,7 @@ import { verificationEmail, passwordResetEmail } from "../auth/email.js";
 import { logger } from "../logger.js";
 import { AppError, ConflictError, ValidationError } from "../errors.js";
 import { requireAuth, principalOf } from "../access/middleware.js";
-import { slugify } from "../util/slug.js";
+import { uniqueSlug } from "../util/slug.js";
 import { auditor } from "../audit/service.js";
 
 export const authRoutes = Router();
@@ -55,7 +55,9 @@ authRoutes.post(
     const company = await prisma.company.create({
       data: {
         name: companyName,
-        slug: slugify(companyName),
+        slug: await uniqueSlug(companyName, (slug) =>
+          prisma.company.findUnique({ where: { slug } }).then(Boolean)
+        ),
         status: config.isDemoSetupEnabled ? "ACTIVE" : "PENDING_VERIFICATION"
       }
     });

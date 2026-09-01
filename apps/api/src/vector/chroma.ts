@@ -27,6 +27,7 @@ export function sanitizeMetadata(meta: Record<string, string | number | boolean 
 }
 
 let collection: chromadb.Collection | null = null;
+let chromaUnavailable = false;
 
 function client(): chromadb.ChromaClient {
   const opts: chromadb.ChromaClientParams = { path: config.CHROMA_URL };
@@ -41,10 +42,20 @@ function client(): chromadb.ChromaClient {
 }
 
 export async function getCollection(): Promise<chromadb.Collection> {
+  if (chromaUnavailable) throw new Error("Chroma is unavailable");
   if (collection) return collection;
-  const c = client();
-  collection = await c.getOrCreateCollection({ name: config.CHROMA_COLLECTION, metadata: { "hnsw:space": "cosine" } });
-  return collection;
+  try {
+    const c = client();
+    collection = await c.getOrCreateCollection({ name: config.CHROMA_COLLECTION, metadata: { "hnsw:space": "cosine" } });
+    return collection;
+  } catch (err) {
+    chromaUnavailable = true;
+    throw err;
+  }
+}
+
+export function isChromaAvailable(): boolean {
+  return !chromaUnavailable;
 }
 
 export async function upsertChunkVector(opts: {
@@ -53,13 +64,10 @@ export async function upsertChunkVector(opts: {
   content: string;
   metadata: ChunkMetadata;
 }): Promise<void> {
-  const col = await getCollection();
   const embedding = opts.embedding ?? [];
-  if (embedding.length === 0) {
-    logger.warn("chroma upsert skipped: no embedding produced", { meta: { chromaId: opts.chromaId } });
-    return;
-  }
+  if (embedding.length === 0) return;
   try {
+    const col = await getCollection();
     await col.upsert({
       ids: [opts.chromaId],
       embeddings: [embedding],
@@ -67,8 +75,7 @@ export async function upsertChunkVector(opts: {
       metadatas: [sanitizeMetadata(opts.metadata)]
     });
   } catch (err) {
-    logger.error("chroma upsert failed", { err, meta: { chromaId: opts.chromaId } });
-    throw err;
+    logger.warn("chroma upsert failed; continuing without vectors", { err, meta: { chromaId: opts.chromaId } });
   }
 }
 
@@ -109,42 +116,51 @@ export async function vectorSearch(opts: {
   if (!filter || opts.principal.companyId == null) return [];
   const where = opts.additionalWhere ? { $and: [filter, opts.additionalWhere] } : filter;
 
-  const col = await getCollection();
-  const res = await col.query({
-    queryEmbeddings: [opts.embedding],
-    nResults: opts.limit ?? config.MAX_VECTOR_RESULTS,
-    where
-  });
-
-  const hits: VectorHit[] = [];
-  const ids = res.ids[0] ?? [];
-  const distances = res.distances?.[0] ?? [];
-  const metadatas = res.metadatas?.[0] ?? [];
-  const documents = res.documents?.[0] ?? [];
-  for (let i = 0; i < ids.length; i++) {
-    const meta = (metadatas[i] ?? {}) as Record<string, unknown>;
-    // Fail-closed double-check: any result that somehow lacks the tenantId
-    // match is dropped.
-    if (meta.companyId !== opts.principal.companyId) continue;
-    hits.push({
-      id: ids[i],
-      score: 1 - (distances[i] ?? 1),
-      documentId: String(meta.documentId ?? ""),
-      companyId: String(meta.companyId ?? ""),
-      chunkIndex: Number(meta.chunk_index ?? 0),
-      section: (meta.section as string | null) ?? null,
-      pageStart: meta.pageStart != null ? Number(meta.pageStart) : null,
-      pageEnd: meta.pageEnd != null ? Number(meta.pageEnd) : null,
-      title: String(meta.title ?? ""),
-      content: documents[i] ?? ""
+  try {
+    const col = await getCollection();
+    const res = await col.query({
+      queryEmbeddings: [opts.embedding],
+      nResults: opts.limit ?? config.MAX_VECTOR_RESULTS,
+      where
     });
+
+    const hits: VectorHit[] = [];
+    const ids = res.ids[0] ?? [];
+    const distances = res.distances?.[0] ?? [];
+    const metadatas = res.metadatas?.[0] ?? [];
+    const documents = res.documents?.[0] ?? [];
+    for (let i = 0; i < ids.length; i++) {
+      const meta = (metadatas[i] ?? {}) as Record<string, unknown>;
+      // Fail-closed double-check: any result that somehow lacks the tenantId
+      // match is dropped.
+      if (meta.companyId !== opts.principal.companyId) continue;
+      hits.push({
+        id: ids[i],
+        score: 1 - (distances[i] ?? 1),
+        documentId: String(meta.documentId ?? ""),
+        companyId: String(meta.companyId ?? ""),
+        chunkIndex: Number(meta.chunk_index ?? 0),
+        section: (meta.section as string | null) ?? null,
+        pageStart: meta.pageStart != null ? Number(meta.pageStart) : null,
+        pageEnd: meta.pageEnd != null ? Number(meta.pageEnd) : null,
+        title: String(meta.title ?? ""),
+        content: documents[i] ?? ""
+      });
+    }
+    return hits;
+  } catch (err) {
+    logger.warn("vector search unavailable; continuing without vectors", { err });
+    return [];
   }
-  return hits;
 }
 
 export async function chromaCount(): Promise<number> {
-  const col = await getCollection();
-  return col.count();
+  try {
+    const col = await getCollection();
+    return col.count();
+  } catch {
+    return 0;
+  }
 }
 
 /** Full text / metadata lookup used by "keyword" retrieval. */
@@ -156,27 +172,32 @@ export async function metadataSearch(opts: {
   const filter = buildChromaAccessFilter(opts.principal);
   if (!filter || opts.principal.companyId == null) return [];
   const where = { $and: [filter, opts.where] };
-  const col = await getCollection();
-  const res = await col.get({ where, limit: opts.limit ?? 20 });
-  const items = res.ids ?? [];
-  const out: VectorHit[] = [];
-  for (let i = 0; i < items.length; i++) {
-    const meta = (res.metadatas?.[i] ?? {}) as Record<string, unknown>;
-    if (meta.companyId !== opts.principal.companyId) continue;
-    out.push({
-      id: items[i],
-      score: 1,
-      documentId: String(meta.documentId ?? ""),
-      companyId: String(meta.companyId ?? ""),
-      chunkIndex: Number(meta.chunk_index ?? 0),
-      section: (meta.section as string | null) ?? null,
-      pageStart: meta.pageStart != null ? Number(meta.pageStart) : null,
-      pageEnd: meta.pageEnd != null ? Number(meta.pageEnd) : null,
-      title: String(meta.title ?? ""),
-      content: String(res.documents?.[i] ?? "")
-    });
+  try {
+    const col = await getCollection();
+    const res = await col.get({ where, limit: opts.limit ?? 20 });
+    const items = res.ids ?? [];
+    const out: VectorHit[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const meta = (res.metadatas?.[i] ?? {}) as Record<string, unknown>;
+      if (meta.companyId !== opts.principal.companyId) continue;
+      out.push({
+        id: items[i],
+        score: 1,
+        documentId: String(meta.documentId ?? ""),
+        companyId: String(meta.companyId ?? ""),
+        chunkIndex: Number(meta.chunk_index ?? 0),
+        section: (meta.section as string | null) ?? null,
+        pageStart: meta.pageStart != null ? Number(meta.pageStart) : null,
+        pageEnd: meta.pageEnd != null ? Number(meta.pageEnd) : null,
+        title: String(meta.title ?? ""),
+        content: String(res.documents?.[i] ?? "")
+      });
+    }
+    return out;
+  } catch (err) {
+    logger.warn("chroma metadata search unavailable; continuing without vectors", { err });
+    return [];
   }
-  return out;
 }
 
 export async function deleteDocumentVectors(documentId: string): Promise<void> {

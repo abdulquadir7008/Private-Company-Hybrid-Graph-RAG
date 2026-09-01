@@ -1,6 +1,8 @@
 // Lightweight fetch wrapper around the Graph RAG API. Auth token is injected
 // from the caller (localStorage-backed AuthProvider).
 
+// NEXT_PUBLIC_API_URL is always inlined at build time (see next.config.mjs,
+// which defaults it to the deployed API when no env var is provided).
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 export class ApiError extends Error {

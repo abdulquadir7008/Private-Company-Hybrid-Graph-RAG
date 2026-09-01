@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import type { DocumentSummary, Paginated } from "@/lib/types";
@@ -33,9 +33,23 @@ export default function DocumentsPage() {
 
   const [aclDraft, setAclDraft] = useState<Record<string, AclDraft>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [documentQuery, setDocumentQuery] = useState("");
   const [sensitivityFilter, setSensitivityFilter] = useState("ALL");
+
+  const showToast = useCallback((type: "success" | "error", message: string) => {
+    setToast({ type, message });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 5000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+  }, []);
 
   const visibleDocs = useMemo(() => {
     const query = documentQuery.trim().toLowerCase();
@@ -85,13 +99,44 @@ export default function DocumentsPage() {
     }
   }
 
+  async function pollUntilSettled(id: string, successMessage: string) {
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      try {
+        const res = await apiFetch<Paginated<DocumentSummary>>("/documents", { token: auth.token });
+        setDocs(res.items);
+        const doc = res.items.find((x) => x.id === id);
+        if (doc && doc.status !== "PROCESSING" && doc.status !== "UPLOADED") {
+          if (doc.status === "FAILED") {
+            showToast("error", `Indexing failed for “${doc.title}”.`);
+          } else {
+            showToast("success", successMessage);
+          }
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+    showToast("error", "Indexing is taking longer than expected. Refresh and check the document status.");
+  }
+
   async function indexDocument(id: string) {
     setError(null);
+    setProcessing((prev) => ({ ...prev, [id]: true }));
     try {
       await apiFetch(`/documents/${id}/index`, { method: "POST", token: auth.token });
-      void load();
+      await pollUntilSettled(id, "Document indexed successfully.");
     } catch (err) {
-      setError((err as Error).message);
+      showToast("error", (err as Error).message);
+    } finally {
+      setProcessing((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      void load();
     }
   }
 
@@ -102,22 +147,27 @@ export default function DocumentsPage() {
     setError(null);
     try {
       await apiFetch(`/documents/${id}/reclassify`, { method: "POST", token: auth.token, body: draft });
-      void load();
+      setSaving(null);
+      await indexDocument(id);
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
+      showToast("error", (err as Error).message);
       setSaving(null);
     }
   }
 
   async function deleteDocument(id: string) {
+    setDeleting(id);
     setError(null);
     try {
       await apiFetch(`/documents/${id}`, { method: "DELETE", token: auth.token });
       setConfirmDelete(null);
+      const title = docs.find((d) => d.id === id)?.title ?? "Document";
+      showToast("success", `“${title}” permanently deleted.`);
       void load();
     } catch (err) {
-      setError((err as Error).message);
+      showToast("error", (err as Error).message);
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -161,6 +211,26 @@ export default function DocumentsPage() {
       {error && (
         <div className="mb-4">
           <Alert tone="rose">{error}</Alert>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed right-4 top-4 z-[60] w-full max-w-sm">
+          <div
+            className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${
+              toast.type === "success"
+                ? "border-emerald-500/40 bg-white text-emerald-700 shadow-emerald-500/10"
+                : "border-rose-500/40 bg-white text-rose-700 shadow-rose-500/10"
+            }`}
+          >
+            <span aria-hidden="true" className="text-base leading-none">
+              {toast.type === "success" ? "✓" : "✕"}
+            </span>
+            <span className="min-w-0 flex-1">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="text-slate-400 transition hover:text-slate-600" aria-label="Dismiss notification">
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -242,9 +312,18 @@ export default function DocumentsPage() {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {d.status !== "INDEXED" && (
-                      <Button onClick={() => void indexDocument(d.id)} disabled={d.status === "PROCESSING"}>
-                        {d.status === "PROCESSING" ? "Indexing…" : "Index"}
+                    {d.status === "INDEXED" ? (
+                      <Badge tone="green">Indexed ✓</Badge>
+                    ) : (
+                      <Button onClick={() => void indexDocument(d.id)} disabled={d.status === "PROCESSING" || processing[d.id]}>
+                        {d.status === "PROCESSING" || processing[d.id] ? (
+                          <>
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                            Indexing…
+                          </>
+                        ) : (
+                          "Index"
+                        )}
                       </Button>
                     )}
                     {admin && (
@@ -301,29 +380,61 @@ export default function DocumentsPage() {
                     <div className="mt-3 flex justify-end gap-2">
                       <Button
                         onClick={() => void saveAcl(d.id)}
-                        disabled={saving === d.id}
+                        disabled={saving === d.id || processing[d.id]}
                         className="bg-emerald-600 hover:bg-emerald-500"
                       >
-                        {saving === d.id ? "Saving…" : "Save classification (reindexes)"}
+                        {saving === d.id || processing[d.id] ? (
+                          <>
+                            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                            {saving === d.id ? "Saving…" : "Reindexing…"}
+                          </>
+                        ) : (
+                          "Save classification (reindexes)"
+                        )}
                       </Button>
                     </div>
                   </div>
                 )}
 
-                {confirmDelete === d.id && (
-                  <div className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm">
-                    <span className="text-rose-200">Permanently delete “{d.title}” and its graph/vectors? This cannot be undone.</span>
-                    <div className="mt-2 flex gap-2">
-                      <Button variant="danger" onClick={() => void deleteDocument(d.id)}>
-                        Delete permanently
-                      </Button>
-                      <Button onClick={() => setConfirmDelete(null)}>Cancel</Button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">Delete document</h2>
+              <button onClick={() => setConfirmDelete(null)} className="text-slate-400 transition hover:text-slate-600" aria-label="Close">
+                <span aria-hidden="true" className="text-xl leading-none">×</span>
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">
+              {(() => {
+                const d = docs.find((x) => x.id === confirmDelete);
+                return d ? `“${d.title}”` : "This document";
+              })()}{" "}
+              and all of its chunks, graph entities, relationships, vectors, and the uploaded file will be{" "}
+              <span className="font-semibold text-rose-700">permanently deleted</span>. This cannot be undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmDelete(null)} disabled={deleting === confirmDelete}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={() => void deleteDocument(confirmDelete)} disabled={deleting === confirmDelete}>
+                {deleting === confirmDelete ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/50 border-t-white" />
+                    Deleting…
+                  </>
+                ) : (
+                  "Delete permanently"
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

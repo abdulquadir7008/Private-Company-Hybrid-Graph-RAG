@@ -188,9 +188,9 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
 
 export function Alert({ tone = "rose", children }: { tone?: "rose" | "green" | "amber"; children: ReactNode }) {
   const map: Record<string, string> = {
-    rose: "border-rose-500/30 bg-rose-500/10 text-rose-200",
-    green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
-    amber: "border-amber-500/30 bg-amber-500/10 text-amber-200"
+    rose: "border-rose-500/30 bg-rose-50 text-rose-700",
+    green: "border-emerald-500/30 bg-emerald-50 text-emerald-700",
+    amber: "border-amber-500/30 bg-amber-50 text-amber-800"
   };
   return <div className={`rounded-lg border px-3 py-2 text-sm ${map[tone]}`}>{children}</div>;
 }

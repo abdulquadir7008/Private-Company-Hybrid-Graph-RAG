@@ -138,7 +138,7 @@ export async function keywordDocuments(principal: Principal, terms: string[]): P
 
   const scored: KeywordHit[] = [];
   for (const row of rows) {
-    const chunks = await topMatchingChunks(row.id, lower, 3);
+    const chunks = await topMatchingChunks(row.id, lower, 5);
     for (const c of chunks) {
       scored.push({
         documentId: row.id,

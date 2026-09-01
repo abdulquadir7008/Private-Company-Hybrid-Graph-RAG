@@ -31,6 +31,8 @@ let chromaUnavailable = false;
 
 function client(): chromadb.ChromaClient {
   const opts: chromadb.ChromaClientParams = { path: config.CHROMA_URL };
+  if (config.CHROMA_TENANT) opts.tenant = config.CHROMA_TENANT;
+  if (config.CHROMA_DATABASE) opts.database = config.CHROMA_DATABASE;
   if (config.CHROMA_API_KEY) {
     opts.auth = {
       provider: "token",

@@ -24,6 +24,10 @@ services:
         value: graphrag_chunks
       - key: CHROMA_API_KEY
         sync: false
+      - key: CHROMA_TENANT
+        sync: false
+      - key: CHROMA_DATABASE
+        sync: false
       - key: AI_PROVIDER
         sync: false
       - key: OPENAI_API_KEY

@@ -17,6 +17,8 @@ const envSchema = z.object({
   CHROMA_URL: z.string().default("http://localhost:8000"),
   CHROMA_COLLECTION: z.string().default("graphrag_chunks"),
   CHROMA_API_KEY: z.string().optional().default(""),
+  CHROMA_TENANT: z.string().optional().default(""),
+  CHROMA_DATABASE: z.string().optional().default(""),
 
   AI_PROVIDER: z.enum(["openai", "huggingface"]).default("openai"),
   OPENAI_API_KEY: z.string().optional().default(""),

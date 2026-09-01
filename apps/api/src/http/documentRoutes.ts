@@ -200,6 +200,7 @@ documentRoutes.post(
     if (!parsed.success) throw new NotFoundError(parsed.error.issues[0]?.message ?? "Invalid classification");
     const doc = await prisma.document.findFirst({ where: { id: req.params.id, companyId: p.companyId } });
     if (!doc) throw new NotFoundError("Document not found");
+    if (doc.status === "PROCESSING") return res.status(409).json({ error: "Document is already being processed" });
 
     await prisma.documentACL.upsert({
       where: { documentId: doc.id },
@@ -234,9 +235,8 @@ documentRoutes.post(
     });
 
     // Reindex to refresh Chroma ACL flags (fail-closed re-narrowing safe).
-    const flags = await import("../access/policy.js");
-    void flags;
-    res.json({ id: doc.id, acl: parsed.data });
+    res.status(202).json({ id: doc.id, status: "PROCESSING" });
+    ingestionPipeline.ingest(doc.id, p.companyId).catch(() => undefined);
   })
 );
 

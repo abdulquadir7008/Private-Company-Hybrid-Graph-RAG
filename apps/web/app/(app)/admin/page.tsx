@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import type { AdminGraph, AdminUser, AuditEntry, DocumentSummary, FeedbackSummary, IngestionJob, Paginated, QueryPlan } from "@/lib/types";
 import { Alert, Badge, Button, Card, EmptyState, Input, Label, PageHeader, Select, Spinner, Stat, formatDate, statusTone } from "@/components/ui";
 
@@ -21,8 +22,14 @@ const TABS: { key: Tab; label: string }[] = [
 export default function AdminPage() {
   useRequireAuth();
   const auth = useAuth();
+  const { toast } = useToast();
   const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!error) return;
+    toast({ type: "error", message: error });
+  }, [error, toast]);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -47,12 +54,6 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
-
-      {error && (
-        <div className="mb-4">
-          <Alert tone="rose">{error}</Alert>
-        </div>
-      )}
 
       {auth.isAdmin && tab === "overview" && <OverviewTab onError={setError} />}
       {auth.isAdmin && tab === "users" && <UsersTab onError={setError} />}

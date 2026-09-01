@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, type ApiError } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import ChatSidebar from "@/components/ChatSidebar";
 import MessageView from "@/components/MessageView";
 import { EmptyState, Alert, Spinner } from "@/components/ui";
@@ -11,6 +12,7 @@ import type { ChatMessage, ChatResponse, Conversation } from "@/lib/types";
 export default function ChatPage() {
   useRequireAuth();
   const auth = useAuth();
+  const { toast } = useToast();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -114,7 +116,8 @@ export default function ChatPage() {
         return exists ? prev : [updated, ...prev];
       });
     } catch (err) {
-      setError((err as ApiError).message ?? "Request failed");
+      setInput(q);
+      toast({ type: "error", message: (err as ApiError).message ?? "Request failed" });
     } finally {
       setSending(false);
       loadingRef.current = false;

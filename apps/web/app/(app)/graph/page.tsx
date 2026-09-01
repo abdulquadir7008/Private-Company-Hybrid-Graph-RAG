@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import GraphCanvas, { colorFor, type CanvasEdge, type CanvasNode } from "@/components/GraphCanvas";
 import type { EntityDetail, GraphRelationship, GraphStats } from "@/lib/types";
-import { Alert, Badge, Button, Card, EmptyState, Input, Select, Spinner, Stat } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select, Spinner, Stat } from "@/components/ui";
 
 export default function GraphPage() {
   useRequireAuth();
   const auth = useAuth();
+  const { toast } = useToast();
 
   const [stats, setStats] = useState<GraphStats | null>(null);
   const [query, setQuery] = useState("");
@@ -19,7 +21,6 @@ export default function GraphPage() {
   const [selected, setSelected] = useState<EntityDetail | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [fullGraph, setFullGraph] = useState<{ nodes: CanvasNode[]; edges: CanvasEdge[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<GraphStats>("/graph/stats", { token: auth.token })
@@ -30,7 +31,6 @@ export default function GraphPage() {
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
     setSearching(true);
-    setError(null);
     setSelected(null);
     setFullGraph(null);
     try {
@@ -40,7 +40,7 @@ export default function GraphPage() {
       );
       setResults(res.items);
     } catch (err) {
-      setError((err as Error).message);
+      toast({ type: "error", message: (err as Error).message });
     } finally {
       setSearching(false);
     }
@@ -49,24 +49,22 @@ export default function GraphPage() {
   const openEntity = useCallback(
     async (name: string) => {
       setLoading(name);
-      setError(null);
       setFullGraph(null);
       try {
         const detail = await apiFetch<EntityDetail>(`/graph/entities/${encodeURIComponent(name)}?depth=${depth}`, { token: auth.token });
         setSelected(detail);
         setResults(detail.relatedEntities.map((r) => ({ id: r.id, name: r.name, type: r.type, description: r.description, confidence: r.confidence })));
       } catch (err) {
-        setError((err as Error).message);
+        toast({ type: "error", message: (err as Error).message });
       } finally {
         setLoading(null);
       }
     },
-    [depth, auth.token]
+    [depth, auth.token, toast]
   );
 
   async function loadFullGraph() {
     setLoading("__all__");
-    setError(null);
     setSelected(null);
     setQuery("");
     try {
@@ -75,7 +73,7 @@ export default function GraphPage() {
       setFullGraph({ nodes, edges });
       setResults([]);
     } catch (err) {
-      setError((err as Error).message);
+      toast({ type: "error", message: (err as Error).message });
     } finally {
       setLoading(null);
     }
@@ -219,11 +217,6 @@ export default function GraphPage() {
       {/* MAIN GRAPH PANEL */}
       <main className="order-1 flex min-h-[640px] min-w-0 flex-1 flex-col md:min-h-0">
         <div className="flex-1 p-3">
-          {error && (
-            <div className="mb-3">
-              <Alert tone="rose">{error}</Alert>
-            </div>
-          )}
           {canvasNodes.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <EmptyState icon="🕸️" title="Pick an entity to explore" hint="Every node you see was verified against your document permissions." />

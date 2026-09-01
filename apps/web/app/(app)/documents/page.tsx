@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
+import { useToast } from "@/components/Toast";
 import type { DocumentSummary, Paginated } from "@/lib/types";
 import { Alert, Badge, Button, Card, EmptyState, formatBytes, formatDate, Input, Label, PageHeader, Select, Spinner, statusTone } from "@/components/ui";
 
@@ -21,6 +22,7 @@ export default function DocumentsPage() {
   useRequireAuth();
   const auth = useAuth();
   const admin = auth.isAdmin;
+  const { toast } = useToast();
 
   const [docs, setDocs] = useState<DocumentSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,20 +38,8 @@ export default function DocumentsPage() {
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [documentQuery, setDocumentQuery] = useState("");
   const [sensitivityFilter, setSensitivityFilter] = useState("ALL");
-
-  const showToast = useCallback((type: "success" | "error", message: string) => {
-    setToast({ type, message });
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
-  }, []);
-
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
 
   const visibleDocs = useMemo(() => {
     const query = documentQuery.trim().toLowerCase();
@@ -109,9 +99,9 @@ export default function DocumentsPage() {
         const doc = res.items.find((x) => x.id === id);
         if (doc && doc.status !== "PROCESSING" && doc.status !== "UPLOADED") {
           if (doc.status === "FAILED") {
-            showToast("error", `Indexing failed for “${doc.title}”.`);
+            toast({ type: "error", message: `Processing failed for “${doc.title}”.` });
           } else {
-            showToast("success", successMessage);
+            toast({ type: "success", message: successMessage });
           }
           return;
         }
@@ -119,7 +109,7 @@ export default function DocumentsPage() {
         return;
       }
     }
-    showToast("error", "Indexing is taking longer than expected. Refresh and check the document status.");
+    toast({ type: "error", message: "Processing is taking longer than expected. Refresh and check the document status." });
   }
 
   async function indexDocument(id: string) {
@@ -129,7 +119,7 @@ export default function DocumentsPage() {
       await apiFetch(`/documents/${id}/index`, { method: "POST", token: auth.token });
       await pollUntilSettled(id, "Document indexed successfully.");
     } catch (err) {
-      showToast("error", (err as Error).message);
+      toast({ type: "error", message: (err as Error).message });
     } finally {
       setProcessing((prev) => {
         const next = { ...prev };
@@ -146,12 +136,20 @@ export default function DocumentsPage() {
     setSaving(id);
     setError(null);
     try {
-      await apiFetch(`/documents/${id}/reclassify`, { method: "POST", token: auth.token, body: draft });
+      await apiFetch<{ id: string }>(`/documents/${id}/reclassify`, { method: "POST", token: auth.token, body: draft });
       setSaving(null);
-      await indexDocument(id);
+      setProcessing((prev) => ({ ...prev, [id]: true }));
+      await pollUntilSettled(id, "Document reclassified and reindexed.");
     } catch (err) {
-      showToast("error", (err as Error).message);
+      toast({ type: "error", message: (err as Error).message });
+    } finally {
       setSaving(null);
+      setProcessing((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      void load();
     }
   }
 
@@ -162,10 +160,10 @@ export default function DocumentsPage() {
       await apiFetch(`/documents/${id}`, { method: "DELETE", token: auth.token });
       setConfirmDelete(null);
       const title = docs.find((d) => d.id === id)?.title ?? "Document";
-      showToast("success", `“${title}” permanently deleted.`);
+      toast({ type: "success", message: `“${title}” permanently deleted.` });
       void load();
     } catch (err) {
-      showToast("error", (err as Error).message);
+      toast({ type: "error", message: (err as Error).message });
     } finally {
       setDeleting(null);
     }
@@ -211,26 +209,6 @@ export default function DocumentsPage() {
       {error && (
         <div className="mb-4">
           <Alert tone="rose">{error}</Alert>
-        </div>
-      )}
-
-      {toast && (
-        <div className="fixed right-4 top-4 z-[60] w-full max-w-sm">
-          <div
-            className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg ${
-              toast.type === "success"
-                ? "border-emerald-500/40 bg-white text-emerald-700 shadow-emerald-500/10"
-                : "border-rose-500/40 bg-white text-rose-700 shadow-rose-500/10"
-            }`}
-          >
-            <span aria-hidden="true" className="text-base leading-none">
-              {toast.type === "success" ? "✓" : "✕"}
-            </span>
-            <span className="min-w-0 flex-1">{toast.message}</span>
-            <button onClick={() => setToast(null)} className="text-slate-400 transition hover:text-slate-600" aria-label="Dismiss notification">
-              <span aria-hidden="true">×</span>
-            </button>
-          </div>
         </div>
       )}
 

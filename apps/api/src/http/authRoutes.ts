@@ -9,6 +9,7 @@ import { signSessionToken, newSessionId } from "../auth/tokens.js";
 import { createVerificationCode, verifyEmailCode } from "../auth/codes.js";
 import { createPasswordResetToken, consumePasswordResetToken, resetPasswordForUser } from "../auth/passwordReset.js";
 import { verificationEmail, passwordResetEmail } from "../auth/email.js";
+import { logger } from "../logger.js";
 import { AppError, ConflictError, ValidationError } from "../errors.js";
 import { requireAuth, principalOf } from "../access/middleware.js";
 import { slugify } from "../util/slug.js";
@@ -72,7 +73,9 @@ authRoutes.post(
 
     const { code, digest } = await createVerificationCode(user.id);
     void digest;
-    await verificationEmail(normalizedEmail, code).catch(() => undefined);
+    await verificationEmail(normalizedEmail, code).catch((err) =>
+      logger.warn("verification email could not be sent", { meta: { to: normalizedEmail, err: String(err) } })
+    );
 
     await auditor.record({
       companyId: company.id,
@@ -117,7 +120,9 @@ authRoutes.post(
     if (user.emailVerifiedAt == null) {
       // Resend code as convenience; error shape stays constant.
       const { code } = await createVerificationCode(user.id);
-      await verificationEmail(user.email, code).catch(() => undefined);
+      await verificationEmail(user.email, code).catch((err) =>
+        logger.warn("verification email could not be sent", { meta: { to: user.email, err: String(err) } })
+      );
       throw new AppError(403, "Please verify your email first", "EMAIL_NOT_VERIFIED");
     }
 

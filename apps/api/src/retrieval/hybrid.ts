@@ -131,7 +131,7 @@ export async function hybridRetrieve(opts: {
   const keywordEvidence: EvidenceItem[] = [];
   for (const kd of kwDocs) {
     keywordEvidence.push({
-      id: `kw:${kd.documentId}`,
+      id: `kw:${kd.documentId}:${kd.chunkId ?? ""}`,
       sourceType: "keyword",
       documentId: kd.documentId,
       documentTitle: kd.title,

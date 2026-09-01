@@ -138,14 +138,19 @@ export async function keywordDocuments(principal: Principal, terms: string[]): P
 
   const scored: KeywordHit[] = [];
   for (const row of rows) {
-    const best = await bestMatchingChunk(row.id, lower);
-    scored.push({
-      documentId: row.id,
-      title: row.title,
-      score: best ? 1 + Math.min(10, best.hits) : 1,
-      chunkId: best?.id ?? null,
-      chunkText: best?.content ?? null
-    });
+    const chunks = await topMatchingChunks(row.id, lower, 3);
+    for (const c of chunks) {
+      scored.push({
+        documentId: row.id,
+        title: row.title,
+        score: 1 + Math.min(10, c.hits),
+        chunkId: c.id,
+        chunkText: c.content
+      });
+    }
+    if (chunks.length === 0) {
+      scored.push({ documentId: row.id, title: row.title, score: 1, chunkId: null, chunkText: null });
+    }
   }
 
   // No title matched: rescue by searching chunk content so content-only
@@ -184,21 +189,22 @@ export async function keywordDocuments(principal: Principal, terms: string[]): P
   return scored.sort((a, b) => b.score - a.score);
 }
 
-async function bestMatchingChunk(documentId: string, terms: string[]): Promise<{ id: string; content: string; hits: number } | null> {
+async function topMatchingChunks(documentId: string, terms: string[], take: number): Promise<{ id: string; content: string; hits: number }[]> {
   const chunks = await prisma.documentChunk.findMany({
     where: { documentId, OR: terms.map((t) => ({ content: { contains: t, mode: "insensitive" } })) },
-    select: { id: true, content: true },
-    orderBy: { index: "asc" },
-    take: 20
+    select: { id: true, content: true, index: true },
+    orderBy: { index: "asc" }
   });
-  let best: { id: string; content: string; hits: number } | null = null;
-  for (const chunk of chunks) {
-    const hits = termOverlap(chunk.content, terms);
-    if (hits > (best?.hits ?? 0)) {
-      best = { id: chunk.id, content: chunk.content, hits };
-    }
-  }
-  return best;
+  return chunks
+    .map((c) => ({
+      id: c.id,
+      content: c.content,
+      index: c.index,
+      hits: termOverlap(c.content, terms)
+    }))
+    .filter((c) => c.hits > 0)
+    .sort((a, b) => b.hits - a.hits || a.index - b.index)
+    .slice(0, take);
 }
 
 function termOverlap(text: string, terms: string[]): number {

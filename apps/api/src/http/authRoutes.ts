@@ -9,6 +9,7 @@ import { signSessionToken, newSessionId } from "../auth/tokens.js";
 import { createVerificationCode, verifyEmailCode } from "../auth/codes.js";
 import { createPasswordResetToken, consumePasswordResetToken, resetPasswordForUser } from "../auth/passwordReset.js";
 import { verificationEmail, passwordResetEmail } from "../auth/email.js";
+import { googleConfigured, googleAuthUrl, exchangeCodeForProfile, upsertGoogleUser } from "../auth/google.js";
 import { logger } from "../logger.js";
 import { AppError, ConflictError, ValidationError } from "../errors.js";
 import { requireAuth, principalOf } from "../access/middleware.js";
@@ -268,3 +269,54 @@ authRoutes.get(
 function throwerIfNull<T>(value: T | null): asserts value is T {
   if (value === null) throw new AppError(404, "Account not found", "NOT_FOUND");
 }
+
+/* ------------------------------------------------------------------ *
+ * Google OAuth (Sign in with Google)
+ * ------------------------------------------------------------------ */
+
+authRoutes.get(
+  "/google",
+  authLimiter,
+  (req, res) => {
+    if (!googleConfigured()) {
+      throw new AppError(501, "Google sign-in is not configured", "GOOGLE_NOT_CONFIGURED");
+    }
+    const returnTo = typeof req.query.redirect === "string" ? req.query.redirect : config.WEB_URL;
+    res.redirect(googleAuthUrl(returnTo));
+  }
+);
+
+authRoutes.get(
+  "/google/callback",
+  asyncHandler(async (req, res) => {
+    if (!googleConfigured()) {
+      throw new AppError(501, "Google sign-in is not configured", "GOOGLE_NOT_CONFIGURED");
+    }
+    const { code, state } = req.query as { code?: string; state?: string };
+    const webUrl = state && /^https?:\/\//.test(state) ? state.replace(/\/+$/, "") : config.WEB_URL.replace(/\/+$/, "");
+
+    const fail = () => res.redirect(`${webUrl}/login?google_error=1`);
+
+    if (!code) return fail();
+
+    let profile;
+    try {
+      profile = await exchangeCodeForProfile(code);
+    } catch (err) {
+      logger.warn("google exchange failed", { meta: { err: String(err) } });
+      return fail();
+    }
+
+    const user = await upsertGoogleUser(profile, req.requestId);
+
+    const token = signSessionToken({
+      sub: user.id,
+      email: user.email,
+      companyId: user.companyId,
+      roleScope: "company",
+      sessionId: newSessionId()
+    });
+
+    res.redirect(`${webUrl}/login?google_token=${encodeURIComponent(token)}`);
+  })
+);

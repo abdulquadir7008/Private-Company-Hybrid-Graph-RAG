@@ -13,6 +13,7 @@ interface AuthContextValue {
   loading: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
 }
@@ -71,6 +72,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser({ ...res.user, mustChangePassword: res.mustChangePassword });
   }, []);
 
+  const loginWithToken = useCallback(async (raw: string) => {
+    if (!raw) return;
+    try {
+      localStorage.setItem(TOKEN_KEY, raw);
+    } catch {
+      /* ignore */
+    }
+    setToken(raw);
+    setLoading(true);
+    try {
+      const me = await apiFetch<MeUser>("/auth/me", { token: raw });
+      setUser(me);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const logout = useCallback(() => {
     try {
       localStorage.removeItem(TOKEN_KEY);
@@ -98,10 +116,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       isAdmin: user?.roles?.includes("ADMIN") ?? user?.isRootAdmin ?? false,
       login,
+      loginWithToken,
       logout,
       refresh
     }),
-    [token, user, loading, login, logout, refresh]
+    [token, user, loading, login, loginWithToken, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

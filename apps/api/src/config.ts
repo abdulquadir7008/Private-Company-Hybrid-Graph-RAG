@@ -43,7 +43,11 @@ const envSchema = z.object({
   MAX_GRAPH_DEPTH: z.coerce.number().default(3),
   MAX_GRAPH_NODES: z.coerce.number().default(50),
   TOP_K_RERANKED: z.coerce.number().default(10),
-  OUTBOUND_EMAIL: z.string().default("console") // "console" | "sendgrid"
+  OUTBOUND_EMAIL: z.string().default("console"), // "console" | "sendgrid"
+
+  GOOGLE_CLIENT_ID: z.string().optional().default(""),
+  GOOGLE_CLIENT_SECRET: z.string().optional().default(""),
+  GOOGLE_AUTH_REDIRECT_URI: z.string().optional().default("")
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ENTITY_TYPES, RELATIONSHIP_TYPES } from "./ontology.js";
+import { ENTITY_TYPES, RELATIONSHIP_TYPES, type EntityType, type RelationshipType } from "./ontology.js";
 
 /* ------------------------------------------------------------------ *
  * Roles / permissions
@@ -159,6 +159,66 @@ export interface QueryPlan {
   maxDepth: number;
   validationErrors: string[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Natural-language -> Graph Query Plan
+ * ------------------------------------------------------------------ */
+
+export const GRAPH_QUERY_INTENTS = [
+  "find_entities",
+  "find_paths",
+  "find_relationships",
+  "neighborhood",
+  "count",
+  "unknown"
+] as const;
+export type GraphQueryIntent = (typeof GRAPH_QUERY_INTENTS)[number];
+
+export interface GraphQueryPathStep {
+  entityType?: EntityType;
+  relationshipType?: RelationshipType;
+}
+
+/**
+ * Structured, schema-validated graph query plan produced by the LLM and then
+ * re-validated server-side before ANY Neo4j interaction. The LLM NEVER emits
+ * Cypher; the server compiles this plan into a bounded, ACL-constrained query.
+ */
+export interface GraphQueryPlan {
+  intent: GraphQueryIntent;
+  targetEntityTypes: EntityType[];
+  startEntityTypes?: EntityType[];
+  startEntityNames?: string[];
+  relationshipTypes?: RelationshipType[];
+  path?: GraphQueryPathStep[];
+  maxDepth?: number;
+  limit?: number;
+  explanation?: string;
+}
+
+export const GRAPH_QUERY_MAX_DEPTH = 4;
+export const GRAPH_QUERY_MAX_LIMIT = 100;
+
+export const graphQueryPathStepSchema = z
+  .object({
+    entityType: z.enum(ENTITY_TYPES).optional(),
+    relationshipType: z.enum(RELATIONSHIP_TYPES).optional()
+  })
+  .strict();
+
+export const graphQueryPlanSchema = z
+  .object({
+    intent: z.enum(GRAPH_QUERY_INTENTS),
+    targetEntityTypes: z.array(z.enum(ENTITY_TYPES)).max(6).default([]),
+    startEntityTypes: z.array(z.enum(ENTITY_TYPES)).max(6).optional(),
+    startEntityNames: z.array(z.string().min(1).max(120)).max(10).optional(),
+    relationshipTypes: z.array(z.enum(RELATIONSHIP_TYPES)).max(8).optional(),
+    path: z.array(graphQueryPathStepSchema).max(12).optional(),
+    maxDepth: z.number().int().min(1).max(GRAPH_QUERY_MAX_DEPTH).optional(),
+    limit: z.number().int().min(1).max(GRAPH_QUERY_MAX_LIMIT).optional(),
+    explanation: z.string().max(400).optional()
+  })
+  .strict();
 
 /* ------------------------------------------------------------------ *
  * Entity / relationship extraction (LLM output validation)

@@ -1,26 +1,62 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import GraphCanvas, { colorFor, type CanvasEdge, type CanvasNode } from "@/components/GraphCanvas";
-import type { EntityDetail, GraphRelationship, GraphStats } from "@/lib/types";
+import type { AiGraphQueryResponse, EntityDetail, GraphRelationship, GraphStats } from "@/lib/types";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, Stat } from "@/components/ui";
+
+interface PathGraph {
+  id: string;
+  nodes: CanvasNode[];
+  edges: CanvasEdge[];
+  highlightNodes: Set<string>;
+  highlightEdges: Set<string>;
+}
+
+/** Schema-based natural-language example queries (only schema types shown). */
+const AI_EXAMPLES = [
+  "Show me everyone related to Remote Work Policy",
+  "Which employees are connected to security policies?",
+  "Show departments connected to employees",
+  "Who reports to managers in Engineering?"
+];
+
+const LOADING_STAGES = [
+  { id: "understand", label: "Understanding graph question…", icon: "✨" },
+  { id: "build", label: "Building graph query…", icon: "🔗" },
+  { id: "verify", label: "Verifying access…", icon: "🛡️" },
+  { id: "render", label: "Building graph…", icon: "🕸️" }
+];
 
 export default function GraphPage() {
   useRequireAuth();
   const auth = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   const [stats, setStats] = useState<GraphStats | null>(null);
   const [query, setQuery] = useState("");
+  const [aiQuery, setAiQuery] = useState("");
   const [depth, setDepth] = useState("1");
   const [results, setResults] = useState<{ id: string; name: string; type: string; description?: string | null; confidence?: number | null }[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<EntityDetail | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [fullGraph, setFullGraph] = useState<{ nodes: CanvasNode[]; edges: CanvasEdge[] } | null>(null);
+  const [pathGraph, setPathGraph] = useState<PathGraph | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+  const [pathError, setPathError] = useState<string | null>(null);
+
+  const [aiResult, setAiResult] = useState<AiGraphQueryResponse | null>(null);
+  const [aiLoadingStage, setAiLoadingStage] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [showPlan, setShowPlan] = useState(false);
+  const [recentQueries, setRecentQueries] = useState<string[]>([]);
 
   useEffect(() => {
     apiFetch<GraphStats>("/graph/stats", { token: auth.token })
@@ -28,11 +64,46 @@ export default function GraphPage() {
       .catch(() => undefined);
   }, [auth.token]);
 
+  // Deep-link support: /graph?message=<id>&path=<pathId> fetches + renders the
+  // exact authorized graph path from the answer's explanation trace. Runs
+  // immediately on mount/navigation so no browser refresh is required.
+  const messageParam = searchParams.get("message");
+  const pathParam = searchParams.get("path");
+
+  useEffect(() => {
+    if (!messageParam || !pathParam || !auth.token) return;
+    let cancelled = false;
+    setPathLoading(true);
+    setPathError(null);
+    setPathGraph(null);
+    setSelected(null);
+    setFullGraph(null);
+    apiFetch<{ path: PathGraph }>(`/graph/explanation-path?message=${encodeURIComponent(messageParam)}&path=${encodeURIComponent(pathParam)}`, { token: auth.token })
+      .then((data) => {
+        if (cancelled) return;
+        const highlightNodes = new Set(data.path.nodes.map((n) => n.id));
+        const highlightEdges = new Set(data.path.edges.map((e) => e.id));
+        setPathGraph({ ...data.path, highlightNodes, highlightEdges });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setPathError((err as Error).message || "This graph path is not available.");
+      })
+      .finally(() => {
+        if (!cancelled) setPathLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [messageParam, pathParam, auth.token]);
+
   async function search(e?: React.FormEvent) {
     e?.preventDefault();
     setSearching(true);
     setSelected(null);
     setFullGraph(null);
+    setPathGraph(null);
+    setPathError(null);
     try {
       const res = await apiFetch<{ items: { id: string; name: string; type: string; description?: string | null; confidence?: number | null }[] }>(
         `/graph/entities?query=${encodeURIComponent(query)}`,
@@ -67,6 +138,8 @@ export default function GraphPage() {
     setLoading("__all__");
     setSelected(null);
     setQuery("");
+    setPathGraph(null);
+    setPathError(null);
     try {
       const rels = await apiFetch<{ items: GraphRelationship[] }>("/graph/relationships", { token: auth.token });
       const { nodes, edges } = normalizeGraph(rels.items);
@@ -77,6 +150,68 @@ export default function GraphPage() {
     } finally {
       setLoading(null);
     }
+  }
+
+  /**
+   * Run a natural-language graph query. Walks the high-level loading stages so
+   * the UI feels responsive without exposing chain-of-thought. Results are set
+   * into aiResult, which flows into the existing `canvasNodes`/`canvasEdges`
+   * memos — because those memos feed GraphCanvas's `dataKey`, the layout is
+   * recomputed and auto-fitted automatically (no browser refresh).
+   */
+  async function runAiQuery(question: string) {
+    const q = (question ?? aiQuery).trim();
+    if (!q) return;
+    if (!auth.token) return;
+    setAiError(null);
+    setAiLoadingStage(LOADING_STAGES[0].id);
+    setAiResult(null);
+
+    // Reveal stages progressively while the request is in flight.
+    const board: ReturnType<typeof setTimeout>[] = [];
+    LOADING_STAGES.forEach((s, i) => {
+      board.push(setTimeout(() => setAiLoadingStage(s.id), i * 450));
+    });
+
+    try {
+      const res = await apiFetch<AiGraphQueryResponse>("/graph/ai-query", { token: auth.token, method: "POST", body: JSON.stringify({ query: q }) });
+
+      setLabel(res, q);
+
+      if (res.queryPlan) setShowPlan(false);
+    } catch (err) {
+      const msg = (err as Error).message;
+      // Friendly, non-leaking error mapping.
+      if (/No authorized entity matched|too broad|too many|translate|temporarily/i.test(msg)) {
+        setAiError(msg);
+      } else {
+        setAiError("Graph query generation is temporarily unavailable. Please try again.");
+      }
+    } finally {
+      board.forEach(clearTimeout);
+      setAiLoadingStage(null);
+    }
+  }
+
+  function setLabel(res: AiGraphQueryResponse, _q: string) {
+    setAiResult(res);
+    const rels = res.relationships ?? [];
+    const iso = res.isolatedNodes ?? [];
+    if (res.isEntitySearch && res.items?.length) {
+      setResults(res.items.map((i) => ({ id: i.id, name: i.name, type: i.type, description: i.description, confidence: i.confidence })));
+      setSelected(null);
+      setFullGraph(null);
+      setPathGraph(null);
+    } else if (rels.length > 0 || iso.length > 0) {
+      setFullGraph(graphFromAi(res));
+      setSelected(null);
+      setPathGraph(null);
+      setResults([]);
+    } else {
+      // No graph data surfaced for this question.
+      setAiError("No authorized graph data matched your query.");
+    }
+    setRecentQueries((prev) => Array.from(new Set([_q, ...prev])).slice(0, 8));
   }
 
   // Entity mode is built from the same canonical GraphRelationship list so the
@@ -90,29 +225,38 @@ export default function GraphPage() {
 
   const canvasNodes: CanvasNode[] = useMemo(
     () =>
-      selected
-        ? entityGraph && entityGraph.nodes.length > 0
-          ? entityGraph.nodes
-          : [
-              {
-                id: selected.entity.id.trim() || selected.entity.name,
-                name: selected.entity.name,
-                type: selected.entity.type
-              }
-            ]
-        : fullGraph?.nodes ?? [],
-    [selected, entityGraph, fullGraph]
+      pathGraph
+        ? pathGraph.nodes
+        : selected
+          ? entityGraph && entityGraph.nodes.length > 0
+            ? entityGraph.nodes
+            : [
+                {
+                  id: selected.entity.id.trim() || selected.entity.name,
+                  name: selected.entity.name,
+                  type: selected.entity.type
+                }
+              ]
+          : fullGraph?.nodes ?? [],
+    [selected, entityGraph, fullGraph, pathGraph]
   );
 
   const canvasEdges: CanvasEdge[] = useMemo(
-    () => (selected ? entityGraph?.edges ?? [] : fullGraph?.edges ?? []),
-    [selected, entityGraph, fullGraph]
+    () => (pathGraph ? pathGraph.edges : selected ? entityGraph?.edges ?? [] : fullGraph?.edges ?? []),
+    [selected, entityGraph, fullGraph, pathGraph]
   );
+
+  const selectedId: string | null = useMemo(() => {
+    if (pathGraph && pathGraph.nodes.length > 0) return pathGraph.nodes[0].id;
+    return selected ? selected.entity.id.trim() || selected.entity.name : null;
+  }, [pathGraph, selected]);
+
+  const graphMode: "auto" | "entity" | "full" | "path" = pathGraph ? "path" : selected ? "entity" : fullGraph ? "full" : "auto";
 
   return (
     <div className="graph-blossom flex min-h-full flex-col overflow-visible bg-[#fffaf9] text-slate-800 md:h-full md:flex-row md:overflow-hidden">
       {/* LEFT SIDEBAR */}
-      <aside className="flex max-h-[22rem] w-full shrink-0 flex-col border-b border-rose-100 bg-white/90 shadow-[-12px_0_32px_rgba(244,63,94,0.04)] backdrop-blur-md md:order-2 md:max-h-none md:w-[19rem] md:border-b-0 md:border-l md:border-r-0">
+      <aside className="flex max-h-[22rem] w-full shrink-0 flex-col overflow-y-auto border-b border-rose-100 bg-white/90 shadow-[-12px_0_32px_rgba(244,63,94,0.04)] backdrop-blur-md md:order-2 md:h-full md:max-h-none md:w-[19rem] md:border-b-0 md:border-l md:border-r-0">
         <div className="border-b border-rose-100 px-4 py-4">
           <div className="flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 text-xs text-white">✦</span>
@@ -180,7 +324,7 @@ export default function GraphPage() {
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-3">
+        <div className="px-3 py-3">
           {loading === "__all__" && <Spinner label="Loading graph…" />}
           <div className="space-y-1.5">
             {results.map((r) => {
@@ -212,12 +356,131 @@ export default function GraphPage() {
             )}
           </div>
         </div>
+
+        <div className="shrink-0 border-t border-rose-100 bg-white/95 px-4 py-3">
+          <div className="rounded-xl border border-rose-100 bg-gradient-to-br from-rose-50/80 to-pink-50/40 p-3">
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <span className="text-xs">✨</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Ask AI</span>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void runAiQuery(aiQuery);
+              }}
+              className="space-y-2"
+            >
+              <Input
+                value={aiQuery}
+                onChange={(e) => setAiQuery(e.target.value)}
+                placeholder="Ask a graph question…"
+                aria-label="Natural-language graph query"
+                className="bg-white/80 text-slate-700"
+              />
+              <Button
+                type="submit"
+                disabled={!!aiLoadingStage || aiQuery.trim().length === 0}
+                className="w-full bg-gradient-to-b from-pink-500 to-rose-500 shadow-pink-200 hover:from-pink-400 hover:to-rose-400"
+              >
+                {aiLoadingStage ? "Working…" : "Ask AI"}
+              </Button>
+            </form>
+
+            <div className="mt-2.5 space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Examples</p>
+              {AI_EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  type="button"
+                  onClick={() => {
+                    setAiQuery(ex);
+                    void runAiQuery(ex);
+                  }}
+                  className="block w-full rounded-md px-2 py-1 text-left text-[11px] text-slate-600 transition hover:bg-rose-100/70 hover:text-rose-700"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+
+            {recentQueries.length > 0 && (
+              <div className="mt-2.5 border-t border-rose-100 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Recent AI queries</p>
+                <div className="space-y-1">
+                  {recentQueries.map((rq) => (
+                    <button
+                      key={rq}
+                      type="button"
+                      onClick={() => {
+                        setAiQuery(rq);
+                        void runAiQuery(rq);
+                      }}
+                      className="block w-full truncate rounded-md px-2 py-1 text-left text-[11px] text-slate-500 transition hover:bg-rose-100/70 hover:text-rose-700"
+                    >
+                      • {rq}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </aside>
 
       {/* MAIN GRAPH PANEL */}
       <main className="order-1 flex min-h-[640px] min-w-0 flex-1 flex-col md:min-h-0">
-        <div className="flex-1 p-3">
-          {canvasNodes.length === 0 ? (
+        {pathGraph && !pathLoading && !pathError && (
+          <div className="flex items-center justify-between gap-3 border-b border-rose-100 bg-white/80 px-4 py-2 backdrop-blur-md">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+              <span className="truncate">
+                Explained path · {pathGraph.nodes.length} entities · {pathGraph.edges.length} relationships
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPathGraph(null);
+                router.replace("/graph");
+              }}
+              className="!px-3 !py-1 !text-xs"
+            >
+              Back to explorer
+            </Button>
+          </div>
+        )}
+        <div className="flex-1 space-y-3 p-3">
+          {aiResult && (
+            <AiGraphResultCard
+              result={aiResult}
+              showPlan={showPlan}
+              onTogglePlan={() => setShowPlan((v) => !v)}
+            />
+          )}
+          {pathLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <Spinner label="Loading explained path…" />
+            </div>
+          ) : pathError ? (
+            <div className="flex h-full items-center justify-center">
+              <EmptyState
+                icon="🕸️"
+                title="Graph path unavailable"
+                hint={pathError}
+              />
+            </div>
+          ) : aiLoadingStage ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Spinner />
+              <p className="mt-3 text-sm text-slate-500">
+                {LOADING_STAGES.find((s) => s.id === aiLoadingStage)?.icon} {LOADING_STAGES.find((s) => s.id === aiLoadingStage)?.label}
+              </p>
+            </div>
+          ) : aiError ? (
+            <div className="flex h-full items-center justify-center">
+              <EmptyState icon="🤖" title="AI graph query" hint={aiError} />
+            </div>
+          ) : canvasNodes.length === 0 ? (
             <div className="flex h-full items-center justify-center">
               <EmptyState icon="🕸️" title="Pick an entity to explore" hint="Every node you see was verified against your document permissions." />
             </div>
@@ -226,10 +489,12 @@ export default function GraphPage() {
               nodes={canvasNodes}
               edges={canvasEdges}
               onSelect={(n) => void openEntity(n.name)}
-              selectedId={selected ? selected.entity.id.trim() || selected.entity.name : null}
-              mode={selected ? "entity" : "full"}
+              selectedId={selectedId}
+              mode={graphMode}
               height={560}
               theme="blossom"
+              highlightNodeIds={pathGraph?.highlightNodes ?? null}
+              highlightEdgeIds={pathGraph?.highlightEdges ?? null}
             />
           )}
         </div>
@@ -285,6 +550,145 @@ export default function GraphPage() {
       </main>
     </div>
   );
+}
+
+/**
+ * AI Graph Query result card: shows the human-readable interpretation of the
+ * user's natural-language request plus a collapsible view of the SAFE structured
+ * query plan. No chain-of-thought, prompts, or internal Cypher are shown.
+ */
+function AiGraphResultCard({
+  result,
+  showPlan,
+  onTogglePlan
+}: {
+  result: AiGraphQueryResponse;
+  showPlan: boolean;
+  onTogglePlan: () => void;
+}) {
+  const plan = result.queryPlan;
+  const steps = result.explanation.steps ?? [];
+
+  return (
+    <Card className="!p-4 shadow-[0_10px_30px_rgba(244,63,94,0.08)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">✨</span>
+            <h2 className="text-sm font-semibold text-slate-900">AI Graph Query</h2>
+          </div>
+          <p className="mt-1 text-xs italic text-slate-500">&ldquo;{result.query}&rdquo;</p>
+          <p className="mt-2 text-sm font-medium text-slate-700">{result.explanation.summary}</p>
+
+          {steps.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-rose-600">
+              {steps.map((s, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-inset ring-rose-100">
+                  {s}
+                  {i < steps.length - 1 && <span className="text-rose-300">→</span>}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-2 text-xs text-slate-500">
+            {result.stats?.nodes ?? 0} entities · {result.stats?.relationships ?? 0} relationships
+          </p>
+        </div>
+        <Button variant="outline" onClick={onTogglePlan} className="shrink-0 !px-3 !py-1.5 !text-xs">
+          {showPlan ? "Hide query details" : "View generated query"}
+        </Button>
+      </div>
+
+      {showPlan && plan && (
+        <div className="mt-3 rounded-lg border border-rose-100 bg-[#fffaf9] p-3">
+          <QueryPlanView plan={plan} />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Human-readable rendering of the validated structured query plan. */
+function QueryPlanView({ plan }: { plan: AiGraphQueryResponse["queryPlan"] }) {
+  if (!plan) return null;
+  const path = plan.path ?? [];
+  const intentLabel = readableIntent(plan);
+
+  return (
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+      <div>
+        <dt className="font-semibold uppercase tracking-wide text-slate-400">Intent</dt>
+        <dd className="mt-0.5 text-slate-700">{intentLabel}</dd>
+      </div>
+      {plan.targetEntityTypes.length > 0 && (
+        <div>
+          <dt className="font-semibold uppercase tracking-wide text-slate-400">Targets</dt>
+          <dd className="mt-0.5 text-slate-700">{plan.targetEntityTypes.join(", ")}</dd>
+        </div>
+      )}
+      {path.length > 0 && (
+        <div className="sm:col-span-2">
+          <dt className="font-semibold uppercase tracking-wide text-slate-400">Path</dt>
+          <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 text-slate-700">
+            {path.map((s, i) => (
+              <span key={i} className="inline-flex items-center gap-1.5">
+                <span className="rounded bg-pink-100 px-1.5 py-0.5 font-medium text-pink-800">{s.entityType ?? "any"}</span>
+                {i < path.length - 1 && <span className="text-rose-300">→</span>}
+              </span>
+            ))}
+          </dd>
+        </div>
+      )}
+      {plan.relationshipTypes && plan.relationshipTypes.length > 0 && (
+        <div>
+          <dt className="font-semibold uppercase tracking-wide text-slate-400">Relationship filters</dt>
+          <dd className="mt-0.5 text-slate-700">{plan.relationshipTypes.join(", ")}</dd>
+        </div>
+      )}
+      <div>
+        <dt className="font-semibold uppercase tracking-wide text-slate-400">Max depth</dt>
+        <dd className="mt-0.5 text-slate-700">{plan.maxDepth ?? 3}</dd>
+      </div>
+      <div>
+        <dt className="font-semibold uppercase tracking-wide text-slate-400">Result limit</dt>
+        <dd className="mt-0.5 text-slate-700">{plan.limit ?? 50}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function readableIntent(plan: AiGraphQueryResponse["queryPlan"]): string {
+  if (!plan) return "—";
+  switch (plan.intent) {
+    case "find_entities":
+      return plan.targetEntityTypes.length ? `Find ${plan.targetEntityTypes.join(" and ")}` : "Find entities";
+    case "find_paths":
+      return "Find paths";
+    case "find_relationships":
+      return "Find relationships";
+    case "neighborhood":
+      return "Neighborhood";
+    case "count":
+      return "Count";
+    default:
+      return "—";
+  }
+}
+
+/**
+ * Normalize an AI graph-query response into canvas nodes+edges compatible with
+ * the existing GraphCanvas. Reuses the centralized node-key strategy so edges
+ * always resolve to real nodes; isolated authorized nodes are appended.
+ */
+function graphFromAi(res: AiGraphQueryResponse): { nodes: CanvasNode[]; edges: CanvasEdge[] } {
+  const base = normalizeGraph(Array.isArray(res.relationships) ? res.relationships : []);
+  const nodesById = new Map<string, CanvasNode>(base.nodes.map((n) => [n.id, n]));
+  for (const n of res.isolatedNodes ?? []) {
+    const key = n.id.trim() || n.name.trim();
+    if (key && !nodesById.has(key)) nodesById.set(key, { id: key, name: n.name, type: n.type || "Topic" });
+  }
+  return { nodes: Array.from(nodesById.values()), edges: base.edges };
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

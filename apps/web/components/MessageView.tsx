@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { apiFetch } from "@/lib/api";
-import type { ChatResponse, Citation, GraphRelationship, GraphPath } from "@/lib/types";
-import { Badge, Button, formatDate } from "@/components/ui";
+import type { AnswerExplanation, Citation, GraphRelationship, GraphPath } from "@/lib/types";
+import { Badge, formatDate } from "@/components/ui";
+import ExplanationDrawer from "./ExplanationDrawer";
 
 type GraphEvidence = { relationships?: GraphRelationship[]; paths?: GraphPath[] };
 
@@ -18,6 +19,8 @@ interface Props {
   messageId?: string | null;
   createdAt?: string | null;
   token?: string | null;
+  explanation?: AnswerExplanation | null;
+  explanationId?: string | null;
 }
 
 export function renderMarkdownLinks(text: string): string {
@@ -79,11 +82,14 @@ export default function MessageView({
   confidence,
   messageId,
   createdAt,
-  token
+  token,
+  explanation,
+  explanationId
 }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [openDocs, setOpenDocs] = useState<Record<string, boolean>>({});
+  const [explainOpen, setExplainOpen] = useState(false);
 
   async function sendFeedback(rating: "HELPFUL" | "NOT_HELPFUL") {
     if (!messageId) return;
@@ -151,6 +157,23 @@ export default function MessageView({
         <div className="markdown-body whitespace-pre-wrap rounded-xl border border-white/10 bg-surface p-4">
           {withCitations(answer, citations)}
         </div>
+
+        {/* Explainable RAG — "Why this answer?" */}
+        {answer && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setExplainOpen(true)}
+              disabled={!messageId}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm font-medium text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden>
+                <path d="M10 12.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Zm0-11a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 10 1.5Z" transform="translate(0 5)" clipRule="evenodd" fillRule="evenodd" />
+                <path d="M10 12.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z" transform="translate(0 5)" opacity="0.3" />
+              </svg>
+              Why this answer?
+            </button>
+          </div>
+        )}
 
         {/* Graph evidence for this answer */}
         {rels.length > 0 && (
@@ -238,6 +261,15 @@ export default function MessageView({
             )}
           </div>
         )}
+
+        <ExplanationDrawer
+          open={explainOpen}
+          onClose={() => setExplainOpen(false)}
+          messageId={messageId}
+          token={token}
+          explanation={explanation ?? null}
+          citations={citations ?? []}
+        />
       </div>
     </div>
   );

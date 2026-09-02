@@ -19,6 +19,8 @@ export type AuditAction =
   | "PASSWORD_RESET"
   | "COMPANY_STATUS_CHANGE"
   | "GRAPH_TRAVERSE"
+  | "GRAPH_PATH_VIEW"
+  | "GRAPH_AI_QUERY"
   | "FEEDBACK"
   | "CONVERSATION_DELETE";
 

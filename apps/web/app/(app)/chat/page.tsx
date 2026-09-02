@@ -102,6 +102,8 @@ export default function ChatPage() {
           citations: res.sources,
           graphEvidence: { relationships: res.graphEvidence, paths: res.paths },
           retrievalMeta: { grounded: res.grounded, confidence: res.confidence },
+          explanation: res.explanation ?? null,
+          explanationId: res.explanationId ?? null,
           createdAt: new Date().toISOString()
         }
       ]);
@@ -175,6 +177,8 @@ export default function ChatPage() {
                       messageId={m.id}
                       token={auth.token}
                       createdAt={m.createdAt}
+                      explanation={m.explanation ?? null}
+                      explanationId={m.explanationId ?? null}
                       grounded={typeof (m.retrievalMeta as { grounded?: boolean } | null)?.grounded === "boolean" ? (m.retrievalMeta as { grounded?: boolean }).grounded : undefined}
                       confidence={
                         typeof (m.retrievalMeta as { confidence?: number } | null)?.confidence === "number"

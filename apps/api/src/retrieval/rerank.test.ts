@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rerankEvidence } from "./rerank.js";
+import { rerankEvidence, fusedScores } from "./rerank.js";
 import type { EvidenceItem } from "@graphrag/shared";
 
 function item(id: string, rollup: number): EvidenceItem {
@@ -48,5 +48,49 @@ describe("rerankEvidence (deterministic RRF)", () => {
       paths: []
     });
     expect(out[0].id).toBe("a");
+  });
+});
+
+describe("fusedScores (deterministic RRF explanation detail)", () => {
+  it("reports sources + fused rrfScore + relevanceScore per evidence id", () => {
+    const out = fusedScores({
+      vector: [item("a", 0.9)],
+      graph: [item("a", 0.8)],
+      keyword: [],
+      paths: []
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("a");
+    expect(out[0].sources.sort()).toEqual(["graph", "vector"]);
+    // vector weight 1.0 / (60+0) + graph weight 0.85 / (60+0)
+    expect(out[0].rrfScore).toBeCloseTo(1.0 / 60 + 0.85 / 60, 4);
+    expect(out[0].relevanceScore).toBe(0.9);
+  });
+
+  it("orders by descending fused rrfScore (multi-source outranks single-source)", () => {
+    const out = fusedScores({
+      vector: [item("multi", 0.5)],
+      graph: [item("multi", 0.5)],
+      keyword: [item("single", 0.99), item("multi", 0.6)],
+      paths: []
+    });
+    // "multi" appears in 3 lists -> highest fused rrfScore regardless of relevance.
+    expect(out[0].id).toBe("multi");
+    expect(out[0].sources.sort()).toEqual(["graph", "keyword", "vector"]);
+    expect(out[1].id).toBe("single");
+    expect(out[1].sources).toEqual(["keyword"]);
+  });
+
+  it("tracks multiple contributed sources for one id and maxes relevance", () => {
+    const out = fusedScores({
+      vector: [item("x", 0.4), item("y", 0.9)],
+      graph: [item("x", 0.7)],
+      keyword: [item("x", 0.95)],
+      paths: []
+    });
+    const x = out.find((s) => s.id === "x");
+    expect(x).toBeDefined();
+    expect(x!.sources.sort()).toEqual(["graph", "keyword", "vector"]);
+    expect(x!.relevanceScore).toBe(0.95);
   });
 });

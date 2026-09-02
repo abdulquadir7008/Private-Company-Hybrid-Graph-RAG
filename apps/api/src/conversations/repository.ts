@@ -8,6 +8,7 @@ export interface ConversationMessage {
   citations?: unknown;
   graphEvidence?: unknown;
   retrievalMeta?: unknown;
+  explanation?: unknown;
 }
 
 export async function getOrCreateConversation(
@@ -45,7 +46,8 @@ export async function appendMessage(
       content: message.content,
       citations: (message.citations ?? null) as never,
       graphEvidence: (message.graphEvidence ?? null) as never,
-      retrievalMeta: (message.retrievalMeta ?? null) as never
+      retrievalMeta: (message.retrievalMeta ?? null) as never,
+      explanation: (message.explanation ?? null) as never
     }
   });
 }

@@ -75,6 +75,50 @@ export interface QueryPlan {
   validationErrors: string[];
 }
 
+/* ------------------------------------------------------------------ *
+ * Natural-language -> Graph Query (mirrors of the API contract)
+ * ------------------------------------------------------------------ */
+
+export type GraphQueryIntent = "find_entities" | "find_paths" | "find_relationships" | "neighborhood" | "count" | "unknown";
+
+export interface GraphQueryPlan {
+  intent: GraphQueryIntent;
+  targetEntityTypes: string[];
+  startEntityTypes?: string[];
+  startEntityNames?: string[];
+  relationshipTypes?: string[];
+  path?: Array<{ entityType?: string; relationshipType?: string }>;
+  maxDepth?: number;
+  limit?: number;
+  explanation?: string;
+}
+
+export interface GraphQueryExplanation {
+  summary: string;
+  steps: string[];
+}
+
+export interface AiGraphQueryResponse {
+  query: string;
+  queryPlan: GraphQueryPlan | null;
+  explanation: GraphQueryExplanation;
+  isEntitySearch: boolean;
+  items?: { id: string; name: string; type: string; description?: string | null; confidence?: number | null }[];
+  relationships: GraphRelationship[];
+  isolatedNodes?: { id: string; name: string; type: string; description?: string | null; confidence?: number | null }[];
+  stats: { nodes: number; relationships: number };
+  trace?: {
+    question: string;
+    intent: string;
+    path: Array<{ entityType?: string; relationshipType?: string }>;
+    maxDepth: number;
+    relationshipTypes: string[];
+    candidateNodes: number;
+    authorizedNodes: number;
+    relationshipsReturned: number;
+  };
+}
+
 export interface ChatResponse {
   conversationId: string;
   messageId: string;
@@ -86,6 +130,8 @@ export interface ChatResponse {
   graphEvidence: GraphRelationship[];
   paths: GraphPath[];
   entities: string[];
+  explanationId?: string;
+  explanation?: AnswerExplanation | null;
   retrievalMeta: { plan: QueryPlan; stats: Record<string, unknown> };
 }
 
@@ -96,6 +142,8 @@ export interface ChatMessage {
   citations?: Citation[] | null;
   graphEvidence?: { relationships?: GraphRelationship[]; paths?: GraphPath[] } | null;
   retrievalMeta?: Record<string, unknown> | null;
+  explanation?: AnswerExplanation | null;
+  explanationId?: string | null;
   createdAt?: string;
 }
 
@@ -208,4 +256,127 @@ export interface IngestionJob {
   createdAt: string;
   completedAt: string | null;
   document: { title: string; status: string; failureReason: string | null };
+}
+
+/* ------------------------------------------------------------------ *
+ * Explainable RAG — mirrors of the explanation trace
+ * ------------------------------------------------------------------ */
+
+export type EvidenceStrength = "HIGH" | "MEDIUM" | "LOW";
+
+export interface ExplanationQueryInterpretation {
+  question: string;
+  normalizedQuestion: string;
+  queryKind: string;
+  detectedEntities: string[];
+  searchTerms: string[];
+  graphDepth: number;
+  vectorEnabled: boolean;
+  graphEnabled: boolean;
+  keywordEnabled: boolean;
+  validationErrors: string[];
+}
+
+export interface ExplanationGraphEvidence {
+  relationshipId: string;
+  type: string;
+  source: { id: string; name: string; type: string };
+  target: { id: string; name: string; type: string };
+  confidence: number | null;
+  documents: string[];
+  authorized: boolean;
+}
+
+export interface ExplanationGraphPath {
+  id: string;
+  nodes: Array<{ id: string; name: string; type: string }>;
+  edges: Array<{ id: string; sourceId: string; targetId: string; type: string }>;
+  depth: number;
+  relevance: number;
+  sourceDocumentIds: string[];
+  authorized: boolean;
+}
+
+export interface ExplanationVectorEvidence {
+  documentId: string;
+  documentTitle: string;
+  chunkId: string;
+  section: string | null;
+  page: number | null;
+  similarity: number;
+  rank: number;
+  authorized: boolean;
+}
+
+export interface ExplanationKeywordEvidence {
+  documentId: string;
+  documentTitle: string;
+  chunkId: string | null;
+  score: number;
+  rank: number;
+  authorized: boolean;
+}
+
+export interface ExplanationStageMetric {
+  stage: string;
+  before: number;
+  after: number;
+  note?: string;
+}
+
+export interface ExplanationClaim {
+  index: number;
+  text: string;
+  citationIndices: number[];
+  graphRelationshipIds: string[];
+  vectorChunkIds: string[];
+}
+
+export interface ExplanationSecurity {
+  tenantVerified: boolean;
+  userAuthenticated: boolean;
+  roleVerified: boolean;
+  departmentVerified: boolean;
+  documentClassificationVerified: boolean;
+  graphEvidenceAuthorized: boolean;
+  vectorEvidenceAuthorized: boolean;
+  finalEvidenceReverified: boolean;
+  excludedCount: number;
+  exclusionNote: string | null;
+}
+
+export interface ExplanationEvidenceStrength {
+  level: EvidenceStrength;
+  supportingSources: number;
+  graphSupport: boolean;
+  vectorSupport: boolean;
+  keywordSupport: boolean;
+  citationCoverage: number;
+  contradictionsDetected: boolean;
+  note: string;
+}
+
+export interface AnswerExplanation {
+  traceId: string;
+  query: string;
+  timestamp: string;
+  retrievalPlan: ExplanationQueryInterpretation;
+  graphEvidence: ExplanationGraphEvidence[];
+  graphPaths: ExplanationGraphPath[];
+  vectorEvidence: ExplanationVectorEvidence[];
+  keywordEvidence: ExplanationKeywordEvidence[];
+  pipelineMetrics: ExplanationStageMetric[];
+  rerankedOrder: string[];
+  answerClaims: ExplanationClaim[];
+  security: ExplanationSecurity;
+  evidenceStrength: ExplanationEvidenceStrength;
+  metrics: {
+    graphCandidates: number;
+    vectorCandidates: number;
+    keywordCandidates: number;
+    afterAclFiltering: number;
+    afterFusion: number;
+    afterReranking: number;
+    usedForAnswer: number;
+  };
 }

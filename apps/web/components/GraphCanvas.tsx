@@ -312,22 +312,25 @@ export function GraphModeHeader({
   edgeCount,
   theme = "dark"
 }: {
-  mode: "entity" | "full";
+  mode: "entity" | "full" | "path";
   title?: string | null;
   nodeCount: number;
   edgeCount: number;
   theme?: "dark" | "blossom";
 }) {
-  const isEntity = mode === "entity";
   const blossom = theme === "blossom";
+  const isEntity = mode === "entity";
+  const isPath = mode === "path";
+  const label = isPath ? "Explained Path" : isEntity ? "Neighborhood" : "Authorized Graph";
   return (
     <div className="pointer-events-none absolute left-3 top-3 z-10 max-w-[75%]">
       <div className={`pointer-events-auto inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 shadow-lg backdrop-blur-md ${blossom ? "border-rose-100 bg-white/90" : "border-white/10 bg-base-900/85"}`}>
         <span
-          className={`h-2 w-2 rounded-full ${isEntity ? "bg-indigo-400 shadow-[0_0_8px_#818cf8]" : "bg-violet-400 shadow-[0_0_8px_#a78bfa]"}`}
+          className={`h-2 w-2 rounded-full ${isPath ? "bg-rose-500 shadow-[0_0_8px_#f43f5e]" : isEntity ? "bg-indigo-400 shadow-[0_0_8px_#818cf8]" : "bg-violet-400 shadow-[0_0_8px_#a78bfa]"}`}
         />
-        <span className={`text-xs font-semibold ${blossom ? "text-slate-800" : "text-slate-100"}`}>{isEntity ? "Neighborhood" : "Authorized Graph"}</span>
+        <span className={`text-xs font-semibold ${blossom ? "text-slate-800" : "text-slate-100"}`}>{label}</span>
         {isEntity && title && <span className={`max-w-[220px] truncate text-xs ${blossom ? "text-rose-500" : "text-indigo-300"}`}>of {title}</span>}
+        {isPath && <span className={`max-w-[220px] truncate text-xs ${blossom ? "text-rose-500" : "text-rose-300"}`}>(highlighted)</span>}
       </div>
       <div className={`mt-1.5 inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium backdrop-blur-md ${blossom ? "bg-white/85 text-slate-500" : "bg-base-900/80 text-slate-400"}`}>
         {nodeCount} nodes · {edgeCount} relationships
@@ -389,15 +392,19 @@ export default function GraphCanvas({
   selectedId,
   mode = "auto",
   height = 620,
-  theme = "dark"
+  theme = "dark",
+  highlightNodeIds,
+  highlightEdgeIds
 }: {
   nodes: CanvasNode[];
   edges: CanvasEdge[];
   onSelect?: (node: CanvasNode) => void;
   selectedId?: string | null;
-  mode?: "auto" | "entity" | "full";
+  mode?: "auto" | "entity" | "full" | "path";
   height?: number;
   theme?: "dark" | "blossom";
+  highlightNodeIds?: Set<string> | null;
+  highlightEdgeIds?: Set<string> | null;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -410,8 +417,16 @@ export default function GraphCanvas({
   const [drag, setDrag] = useState<{ sx: number; sy: number; vx: number; vy: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  const resolvedMode: "entity" | "full" =
-    mode === "auto" ? (selectedId ? "entity" : "full") : mode === "entity" ? "entity" : "full";
+  const resolvedMode: "entity" | "full" | "path" =
+    mode === "path"
+      ? "path"
+      : mode === "auto"
+        ? selectedId
+          ? "entity"
+          : "full"
+        : mode === "entity"
+          ? "entity"
+          : "full";
 
   // Defensive clean-up: skip edges whose endpoints are missing/unknown.
   const { validNodes, validEdges } = useMemo(() => {
@@ -430,8 +445,13 @@ export default function GraphCanvas({
     return set;
   }, [selectedId, validEdges]);
 
+  // Path mode: which nodes/edges are "on" the currently highlighted path.
+  const isPathMode = resolvedMode === "path";
+  const pathNodeSet = highlightNodeIds ?? null;
+  const pathEdgeSet = highlightEdgeIds ?? null;
+
   const layout = useMemo(
-    () => computeLayout(validNodes, validEdges, selectedId ?? null, resolvedMode === "entity" ? "radial" : "force"),
+    () => computeLayout(validNodes, validEdges, selectedId ?? null, resolvedMode === "entity" || resolvedMode === "path" ? "radial" : "force"),
     [validNodes, validEdges, selectedId, resolvedMode]
   );
 
@@ -484,8 +504,11 @@ export default function GraphCanvas({
   // supplied (nodes/edges/mode/selected root). Used to decide when to auto-fit.
   const dataKey = useMemo(() => {
     const nodeSig = validNodes.map((n) => `${n.type}:${n.id}`).sort().join("|");
-    return `${resolvedMode}|${selectedId ?? ""}|${nodeSig}|e:${validEdges.length}`;
-  }, [validNodes, validEdges, resolvedMode, selectedId]);
+    const edgeSig = validEdges.map((e) => e.id).sort().join("|");
+    const hlN = highlightNodeIds ? Array.from(highlightNodeIds).sort().join(",") : "";
+    const hlE = highlightEdgeIds ? Array.from(highlightEdgeIds).sort().join(",") : "";
+    return `${resolvedMode}|${selectedId ?? ""}|${nodeSig}|e:${edgeSig}|hn:${hlN}|he:${hlE}`;
+  }, [validNodes, validEdges, resolvedMode, selectedId, highlightNodeIds, highlightEdgeIds]);
 
   const fittedKeyRef = useRef<string>("");
   const fittedWidthRef = useRef(0);
@@ -692,15 +715,18 @@ export default function GraphCanvas({
           if (!s || !t) return null;
           const isSelectedEdge = !!selectedId && (e.source === selectedId || e.target === selectedId);
           const isHoverEdge = !!hoverId && (e.source === hoverId || e.target === hoverId);
-          const isDimmed = selectedNeighbors.size > 0 && !isSelectedEdge;
-          const active = isSelectedEdge || isHoverEdge;
+          const onPath = isPathMode && pathEdgeSet ? pathEdgeSet.has(e.id) : false;
+          const isDimmed = isPathMode
+            ? pathEdgeSet != null && !onPath
+            : selectedNeighbors.size > 0 && !isSelectedEdge;
+          const active = isSelectedEdge || isHoverEdge || (isPathMode && onPath);
           const strokeColor = active ? (blossom ? "#f43f5e" : "#818cf8") : blossom ? "#cbd5e1" : "#334155";
-          const width = active ? 2.2 : 1.3;
+          const width = active ? 2.6 : 1.3;
           const mx = (s.x + t.x) / 2;
           const my = (s.y + t.y) / 2;
 
           return (
-            <g key={e.id} opacity={isDimmed ? 0.28 : 1}>
+            <g key={e.id} opacity={isDimmed ? 0.22 : 1}>
               <line
                 x1={s.x}
                 y1={s.y}
@@ -728,10 +754,14 @@ export default function GraphCanvas({
           if (!p) return null;
           const isSelected = n.id === selectedId;
           const isNeighbor = selectedNeighbors.has(n.id);
-          const isDimmed = !!selectedId && !isSelected && !isNeighbor && selectedNeighbors.size > 0;
+          const onPath = isPathMode && pathNodeSet ? pathNodeSet.has(n.id) : false;
+          const isDimmed = isPathMode
+            ? pathNodeSet != null && !onPath
+            : !!selectedId && !isSelected && !isNeighbor && selectedNeighbors.size > 0;
           const isHovered = n.id === hoverId;
-          const r = isSelected ? NODE_RADIUS + 6 : isHovered ? NODE_RADIUS + 3 : NODE_RADIUS;
+          const r = isSelected ? NODE_RADIUS + 6 : isHovered ? NODE_RADIUS + 3 : isPathMode && onPath ? NODE_RADIUS + 3 : NODE_RADIUS;
           const color = colorFor(n.type);
+          const isPathHighlight = isPathMode && onPath;
 
           return (
             <g
@@ -753,6 +783,9 @@ export default function GraphCanvas({
             >
               {isSelected && (
                 <circle r={r + 5} fill="none" stroke={color} strokeOpacity={0.5} strokeWidth={1.5} strokeDasharray="3 3" style={{ transformOrigin: `${p.x}px ${p.y}px`, animation: "spin 12s linear infinite" }} />
+              )}
+              {isPathHighlight && !isSelected && (
+                <circle r={r + 5} fill="none" stroke={blossom ? "#f43f5e" : "#f97316"} strokeOpacity={0.75} strokeWidth={1.8} />
               )}
               <circle r={r} fill="url(#nodeGlow)" opacity={isSelected ? 0.35 : 0} style={{ transition: "opacity 0.15s" }} />
               <circle

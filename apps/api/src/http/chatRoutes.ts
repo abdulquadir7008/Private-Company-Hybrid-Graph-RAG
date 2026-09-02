@@ -5,10 +5,12 @@ import { asyncHandler } from "../util/asyncHandler.js";
 import { requireAuth, requireCompanyPrincipal } from "../access/middleware.js";
 import { hybridRetrieve } from "../retrieval/hybrid.js";
 import { generateGroundedAnswer } from "../answer/generate.js";
+import { buildExplanation } from "../answer/explanation.js";
 import { condenseQuestion } from "../conversations/condense.js";
 import { getOrCreateConversation, appendMessage, listConversations, getConversation, updateConversationTitle } from "../conversations/repository.js";
 import { Auditor } from "../audit/service.js";
-import { ValidationError } from "../errors.js";
+import { ValidationError, NotFoundError } from "../errors.js";
+import { uuid } from "../util/ids.js";
 
 export const chatRoutes = Router();
 
@@ -40,6 +42,12 @@ chatRoutes.post(
     const hybrid = await hybridRetrieve({ principal: p, question: resolvedQuestion, depth });
     const grounded = await generateGroundedAnswer({ question: resolvedQuestion, hybrid, history });
 
+    // Explainable RAG: build an ACL-aware trace from the SAME retrieval pass.
+    // This performs no additional retrieval — it is a pure transform of the
+    // authorized evidence the answer was already grounded on.
+    const traceId = uuid();
+    const explanation = buildExplanation({ traceId, question: resolvedQuestion, hybrid, grounded });
+
     const userMsg = await appendMessage(conversation.id, p.companyId, {
       role: "user",
       content: question,
@@ -50,7 +58,8 @@ chatRoutes.post(
       content: grounded.answer,
       citations: grounded.sources,
       graphEvidence: { relationships: grounded.graphEvidence, paths: grounded.paths },
-      retrievalMeta: { grounded: grounded.grounded, confidence: grounded.confidence, plan: hybrid.plan, retrieval: hybrid.retrievalMeta }
+      retrievalMeta: { grounded: grounded.grounded, confidence: grounded.confidence, plan: hybrid.plan, retrieval: hybrid.retrievalMeta, traceId },
+      explanation
     });
 
     if (conversation.title === "New conversation") {
@@ -91,6 +100,8 @@ chatRoutes.post(
       graphEvidence: grounded.graphEvidence,
       paths: grounded.paths,
       entities: hybrid.plan.detectedEntities,
+      explanationId: traceId,
+      explanation: explanation,
       retrievalMeta: { plan: hybrid.plan, stats: hybrid.retrievalMeta }
     });
   })
@@ -112,6 +123,42 @@ chatRoutes.get(
     const p = requireCompanyPrincipal(req);
     const conversation = await getConversation(p, req.params.id);
     res.json(conversation);
+  })
+);
+
+/**
+ * GET /answers/:messageId/explanation
+ *
+ * Returns the stored, ACL-scoped explanation trace for one assistant answer.
+ *
+ * Authorization model:
+ *  - Requires a company session.
+ *  - The message must belong to the caller's tenant (companyId).
+ *  - The message's conversation must belong to the caller (userId).
+ *  - Only the persisted trace (already ACL-filtered at generation time) is
+ *    returned; it is re-scoped to the caller's tenant on read.
+ */
+chatRoutes.get(
+  "/answers/:messageId/explanation",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const p = requireCompanyPrincipal(req);
+    const message = await prisma.message.findFirst({
+      where: {
+        id: req.params.messageId,
+        companyId: p.companyId,
+        role: "assistant",
+        conversation: { userId: p.userId }
+      },
+      select: { id: true, explanation: true }
+    });
+    if (!message) throw new NotFoundError("Explanation not found");
+
+    if (!message.explanation) {
+      res.status(404).json({ error: "No explanation available for this answer", code: "NO_EXPLANATION" });
+      return;
+    }
+    res.json(message.explanation as unknown);
   })
 );
 

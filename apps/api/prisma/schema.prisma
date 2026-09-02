@@ -315,6 +315,7 @@ model Message {
   citations      Json?
   graphEvidence  Json?
   retrievalMeta  Json?
+  explanation    Json?
   feedback       AnswerFeedback?
   createdAt      DateTime        @default(now())
   User           User?           @relation(fields: [userId], references: [id])

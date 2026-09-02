@@ -22,6 +22,55 @@ const SOURCE_WEIGHT: Record<string, number> = {
   path: 0.9
 };
 
+export interface FusedScoreDetail {
+  id: string;
+  sources: string[];
+  rrfScore: number;
+  relevanceScore: number;
+}
+
+/**
+ * Deterministic RRF fusion detail for the explanation trace. Returns, for each
+ * evidence id, the set of source types that contributed and the fused RRF
+ * score, mirroring the exact math used by `rerankEvidence`. Pure + side-effect
+ * free, so it never performs additional retrieval.
+ */
+export function fusedScores(groups: {
+  vector: EvidenceItem[];
+  graph: EvidenceItem[];
+  keyword: EvidenceItem[];
+  paths: EvidenceItem[];
+}): FusedScoreDetail[] {
+  const fused = new Map<string, { sources: Set<string>; rrf: number; relevance: number }>();
+  const contribute = (items: EvidenceItem[], source: string, weight: number) => {
+    items.forEach((item, rank) => {
+      const prior = fused.get(item.id);
+      const rrf = weight / (60 + rank);
+      if (prior) {
+        prior.sources.add(source);
+        prior.rrf += rrf;
+        prior.relevance = Math.max(prior.relevance, item.relevanceScore);
+      } else {
+        fused.set(item.id, { sources: new Set([source]), rrf, relevance: item.relevanceScore });
+      }
+    });
+  };
+
+  contribute(groups.vector, "vector", SOURCE_WEIGHT.vector);
+  contribute(groups.graph, "graph", SOURCE_WEIGHT.graph);
+  contribute(groups.keyword, "keyword", SOURCE_WEIGHT.keyword);
+  contribute(groups.paths, "path", SOURCE_WEIGHT.path);
+
+  return Array.from(fused.entries())
+    .map(([id, v]) => ({
+      id,
+      sources: Array.from(v.sources),
+      rrfScore: Math.round(v.rrf * 10000) / 10000,
+      relevanceScore: Math.round(v.relevance * 100) / 100
+    }))
+    .sort((a, b) => b.rrfScore - a.rrfScore);
+}
+
 export function rerankEvidence(groups: {
   vector: EvidenceItem[];
   graph: EvidenceItem[];

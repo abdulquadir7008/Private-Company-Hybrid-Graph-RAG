@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function RegisterPage() {
@@ -44,7 +45,9 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create account" subtitle="Start your secure Graph RAG workspace">
+    <>
+      <PageSeo title="Create Account" description="Create a secure Graph RAG knowledge workspace for your organization. Your company gets an isolated, private knowledge graph." keywords={["register", "sign up", "create account", "Graph RAG workspace"]} />
+      <AuthShell title="Create account" subtitle="Start your secure Graph RAG workspace">
       <form onSubmit={onSubmit} className="auth-form space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         <div>
@@ -68,5 +71,6 @@ export default function RegisterPage() {
         </Button>
       </form>
     </AuthShell>
+    </>
   );
 }

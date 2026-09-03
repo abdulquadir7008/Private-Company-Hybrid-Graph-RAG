@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function ForgotPasswordPage() {
@@ -27,7 +28,9 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthShell title="Reset your password" subtitle="We will email you a secure reset link if the account exists">
+    <>
+      <PageSeo title="Forgot Password" description="Reset your password for your Graph RAG knowledge graph workspace account." keywords={["forgot password", "reset password", "account recovery"]} />
+      <AuthShell title="Reset your password" subtitle="We will email you a secure reset link if the account exists">
       {done ? (
         <Alert tone="green">If that email exists, a reset link has been sent. Check your inbox.</Alert>
       ) : (
@@ -48,5 +51,6 @@ export default function ForgotPasswordPage() {
         </form>
       )}
     </AuthShell>
+    </>
   );
 }

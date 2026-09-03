@@ -6,6 +6,7 @@ import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import ChatSidebar from "@/components/ChatSidebar";
 import MessageView from "@/components/MessageView";
+import PageSeo from "@/components/PageSeo";
 import { EmptyState, Alert, Spinner } from "@/components/ui";
 import type { ChatMessage, ChatResponse, Conversation } from "@/lib/types";
 
@@ -183,7 +184,9 @@ export default function ChatPage() {
   if (!auth.token) return null;
 
   return (
-    <div className="chat-workspace flex h-full bg-[#fffaf9]">
+    <>
+      <PageSeo title="Chat" description="Ask questions across your private company knowledge graph and receive explainable, grounded answers with citations." keywords={["chat", "AI assistant", "knowledge graph Q&A", "RAG chat"]} />
+      <div className="chat-workspace flex h-full bg-[#fffaf9]">
       <ChatSidebar
         conversations={conversations}
         activeId={activeId}
@@ -301,5 +304,6 @@ export default function ChatPage() {
       </div>
       <ChatContextPanel />
     </div>
+    </>
   );
 }

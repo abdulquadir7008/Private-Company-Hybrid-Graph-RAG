@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function ChangePasswordPage() {
@@ -50,7 +51,9 @@ function ChangePasswordForm() {
   }
 
   return (
-    <AuthShell title="Change your password" subtitle="Keep your account secure">
+    <>
+      <PageSeo title="Change Password" description="Change your password to keep your Graph RAG knowledge graph workspace account secure." keywords={["change password", "account security", "update password"]} />
+      <AuthShell title="Change your password" subtitle="Keep your account secure">
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         <div>
@@ -75,5 +78,6 @@ function ChangePasswordForm() {
         </div>
       </form>
     </AuthShell>
+    </>
   );
 }

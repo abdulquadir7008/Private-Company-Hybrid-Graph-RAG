@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function LoginPage() {
@@ -74,7 +75,9 @@ function LoginForm() {
   }
 
   return (
-    <AuthShell title="Sign in" subtitle="Access your Graph RAG workspace">
+    <>
+      <PageSeo title="Sign in" description="Sign in to your Graph RAG workspace and explore your company's private knowledge graph." keywords={["sign in", "login", "Graph RAG", "knowledge graph workspace"]} />
+      <AuthShell title="Sign in" subtitle="Access your Graph RAG workspace">
       <form onSubmit={onSubmit} className="auth-form space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         {notice && <Alert tone="amber">{notice}</Alert>}
@@ -111,5 +114,6 @@ function LoginForm() {
       </Button>
       <div className="mt-5 text-center text-sm text-slate-500">Don’t have an account? <Link href="/register" className="font-medium text-rose-500 hover:underline">Create account</Link></div>
     </AuthShell>
+    </>
   );
 }

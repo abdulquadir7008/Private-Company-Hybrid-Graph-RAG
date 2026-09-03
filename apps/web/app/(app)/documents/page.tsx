@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch, apiUrl } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
+import PageSeo from "@/components/PageSeo";
 import type { DocumentSummary, Paginated } from "@/lib/types";
 import { Alert, Badge, Button, Card, EmptyState, formatBytes, formatDate, Input, Label, PageHeader, Select, Spinner, statusTone } from "@/components/ui";
 
@@ -186,7 +187,9 @@ export default function DocumentsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <>
+      <PageSeo title="Documents" description="Upload, classify, and manage company documents with per-document access control for your Graph RAG knowledge graph." keywords={["documents", "document management", "ACL", "classification", "knowledge graph"]} />
+      <div className="mx-auto max-w-5xl px-6 py-8">
       <PageHeader
         title="Documents"
         subtitle="Upload and classify your company documents. Access control is enforced per document."
@@ -416,5 +419,6 @@ export default function DocumentsPage() {
         </div>
       )}
     </div>
+    </>
   );
 }

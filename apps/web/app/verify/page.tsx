@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function VerifyPage() {
@@ -38,7 +39,9 @@ function VerifyForm() {
   }
 
   return (
-    <AuthShell title="Verify your email" subtitle="Enter the 6-digit code we emailed you">
+    <>
+      <PageSeo title="Verify Email" description="Verify your email address to activate your Graph RAG knowledge graph workspace account." keywords={["verify email", "email verification", "activate account"]} />
+      <AuthShell title="Verify your email" subtitle="Enter the 6-digit code we emailed you">
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         <div>
@@ -66,5 +69,6 @@ function VerifyForm() {
         </div>
       </form>
     </AuthShell>
+    </>
   );
 }

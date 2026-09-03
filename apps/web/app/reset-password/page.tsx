@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { AuthShell } from "@/components/AuthShell";
+import PageSeo from "@/components/PageSeo";
 import { Alert, Button, Input, Label } from "@/components/ui";
 
 export default function ResetPasswordPage() {
@@ -43,7 +44,9 @@ function ResetForm() {
   }
 
   return (
-    <AuthShell title="Choose a new password" subtitle="Set a strong password for your account">
+    <>
+      <PageSeo title="Reset Password" description="Choose a new password to regain access to your Graph RAG knowledge graph workspace." keywords={["reset password", "new password", "account security"]} />
+      <AuthShell title="Choose a new password" subtitle="Set a strong password for your account">
       <form onSubmit={onSubmit} className="space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         <div>
@@ -64,5 +67,6 @@ function ResetForm() {
         </div>
       </form>
     </AuthShell>
+    </>
   );
 }

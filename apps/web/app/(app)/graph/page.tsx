@@ -6,6 +6,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import GraphCanvas, { colorFor, type CanvasEdge, type CanvasNode } from "@/components/GraphCanvas";
+import PageSeo from "@/components/PageSeo";
 import type { AiGraphQueryResponse, EntityDetail, GraphRelationship, GraphStats } from "@/lib/types";
 import { Badge, Button, Card, EmptyState, Input, Select, Spinner, Stat } from "@/components/ui";
 
@@ -256,7 +257,9 @@ export default function GraphPage() {
   const graphMode: "auto" | "entity" | "full" | "path" = pathGraph ? "path" : selected ? "entity" : fullGraph ? "full" : "auto";
 
   return (
-    <div className="graph-blossom flex min-h-full flex-col overflow-visible bg-[#fffaf9] text-slate-800 md:h-full md:flex-row md:overflow-hidden">
+    <>
+      <PageSeo title="Graph Explorer" description="Visualize and explore your private company knowledge graph with natural-language queries, entity neighborhoods, and relationship paths." keywords={["graph explorer", "knowledge graph", "entity browser", "graph traversal", "relationships"]} />
+      <div className="graph-blossom flex min-h-full flex-col overflow-visible bg-[#fffaf9] text-slate-800 md:h-full md:flex-row md:overflow-hidden">
       {/* LEFT SIDEBAR */}
       <aside className="flex max-h-[22rem] w-full shrink-0 flex-col overflow-y-auto border-b border-rose-100 bg-white/90 shadow-[-12px_0_32px_rgba(244,63,94,0.04)] backdrop-blur-md md:order-2 md:h-full md:max-h-none md:w-[19rem] md:border-b-0 md:border-l md:border-r-0">
         <div className="border-b border-rose-100 px-4 py-4">
@@ -551,6 +554,7 @@ export default function GraphPage() {
         )}
       </main>
     </div>
+    </>
   );
 }
 

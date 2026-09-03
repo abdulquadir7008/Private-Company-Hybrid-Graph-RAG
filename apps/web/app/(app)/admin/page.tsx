@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
+import PageSeo from "@/components/PageSeo";
 import type { AdminGraph, AdminUser, AuditEntry, DocumentSummary, FeedbackSummary, IngestionJob, Paginated, QueryPlan } from "@/lib/types";
 import { Alert, Badge, Button, Card, EmptyState, Input, Label, PageHeader, Select, Spinner, Stat, formatDate, statusTone } from "@/components/ui";
 
@@ -32,7 +33,9 @@ export default function AdminPage() {
   }, [error, toast]);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
+    <>
+      <PageSeo title="Admin" description="Operational administration of your knowledge graph workspace — users, documents, ingestion, feedback, and retrieval diagnostics." keywords={["admin", "workspace administration", "user management", "ingestion", "RAG diagnostics"]} />
+      <div className="mx-auto max-w-6xl px-6 py-8">
       <PageHeader
         title="Admin"
         subtitle="Operational view of your knowledge graph workspace."
@@ -63,6 +66,7 @@ export default function AdminPage() {
       {auth.isAdmin && tab === "audit" && <AuditTab onError={setError} />}
       {auth.isAdmin && tab === "debug" && <DebugTab onError={setError} />}
     </div>
+    </>
   );
 }
 

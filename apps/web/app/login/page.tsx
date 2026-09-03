@@ -25,6 +25,7 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [remember, setRemember] = useState(true);
 
   useEffect(() => {
     if (loading) return;
@@ -73,8 +74,8 @@ function LoginForm() {
   }
 
   return (
-    <AuthShell title="Sign in" subtitle="Welcome back to your Graph RAG workspace">
-      <form onSubmit={onSubmit} className="space-y-4">
+    <AuthShell title="Sign in" subtitle="Access your Graph RAG workspace">
+      <form onSubmit={onSubmit} className="auth-form space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         {notice && <Alert tone="amber">{notice}</Alert>}
         {notice?.includes("verify") && (
@@ -83,35 +84,32 @@ function LoginForm() {
           </Link>
         )}
         <div>
-          <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
+          <Label>Email address</Label>
+          <Input className="auth-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
         </div>
         <div>
           <Label>Password</Label>
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
+          <Input className="auth-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
         </div>
-        <Button type="submit" disabled={busy || googleBusy} className="w-full">
-          {busy ? "Signing in…" : "Sign in"}
+        <div className="flex items-center justify-between pt-1 text-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-slate-600"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="h-4 w-4 accent-rose-500" />Remember me</label>
+          <Link href="/forgot-password" className="font-medium text-rose-500 hover:underline">Forgot password?</Link>
+        </div>
+        <Button type="submit" disabled={busy || googleBusy} className="auth-submit w-full text-[17px]">
+          {busy ? "Signing in…" : <>Sign in <span className="ml-auto text-3xl font-light leading-none">→</span></>}
         </Button>
-        <div className="flex justify-between pt-1 text-xs">
-          <Link href="/forgot-password" className="text-indigo-400 hover:underline">
-            Forgot password?
-          </Link>
-          <Link href="/register" className="text-slate-400 hover:text-slate-200">
-            Create account
-          </Link>
-        </div>
       </form>
 
-      <div className="my-4 flex items-center gap-3 text-xs text-slate-500">
-        <span className="h-px flex-1 bg-white/10" />
+      <div className="my-5 flex items-center gap-3 text-sm text-slate-500">
+        <span className="h-px flex-1 bg-rose-100" />
         or continue with
-        <span className="h-px flex-1 bg-white/10" />
+        <span className="h-px flex-1 bg-rose-100" />
       </div>
 
-      <Button type="button" variant="outline" onClick={startGoogle} disabled={googleBusy} className="w-full">
-        {googleBusy ? "Redirecting to Google…" : "Sign in with Google"}
+      <Button type="button" variant="outline" onClick={startGoogle} disabled={googleBusy} className="auth-google w-full text-[16px]">
+        {googleBusy ? "Redirecting to Google…" : <><span className="text-xl font-bold text-[#4285F4]">G</span> Sign in with Google</>}
       </Button>
+      <div className="mt-5 text-center text-sm text-slate-500">Don’t have an account? <Link href="/register" className="font-medium text-rose-500 hover:underline">Create account</Link></div>
     </AuthShell>
   );
 }

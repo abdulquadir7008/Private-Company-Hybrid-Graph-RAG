@@ -1,18 +1,32 @@
 import type { ReactNode } from "react";
 
+function Mark({ className = "" }: { className?: string }) {
+  return <svg viewBox="0 0 48 48" fill="none" aria-hidden="true" className={className}><path d="m14 15 10-6 10 6m-20 0-2 14 12 10 12-10-2-14m-20 0 10 9 10-9m-22 14 12-5 12 5M24 24v15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />{[[14,15],[34,15],[12,29],[36,29],[24,9],[24,39]].map(([cx,cy]) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.2" fill="currentColor" />)}</svg>;
+}
+
+function Icon({ type }: { type: "shield" | "brain" | "graph" | "document" | "lock" | "people" | "building" }) {
+  const c = "h-7 w-7";
+  if (type === "graph") return <Mark className={c} />;
+  if (type === "shield") return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="m12 3 7 3v5c0 4.7-3 8.3-7 10-4-1.7-7-5.3-7-10V6l7-3Z" /></svg>;
+  if (type === "brain") return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 5.2A3.5 3.5 0 0 0 4 8.4c0 1 .4 1.8 1 2.5A3.5 3.5 0 0 0 8 17a3.4 3.4 0 0 0 5.8 1.5A3.4 3.4 0 0 0 19 15a3.5 3.5 0 0 0 0-6.6A3.5 3.5 0 0 0 14.5 5M9 5.2V19M15 5v14M5 11h4m6 0h4m-14 3h4m6 0h4" /></svg>;
+  if (type === "document") return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 3h8l4 4v14H6zM14 3v5h5M9 13h6M9 17h6" /></svg>;
+  if (type === "people") return <svg className={c} viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.3" opacity=".8"/><path d="M3 19c.5-4 3-6 6-6s5.5 2 6 6H3Zm11.2-.2c.1-1.8-.5-3.3-1.6-4.5 3.3-.5 5.5 1.1 6.1 4.5h-4.5Z" /></svg>;
+  if (type === "building") return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 21h16M6 21V9l6-4 6 4v12M9 12h1m4 0h1m-6 3h1m4 0h1m-5 6v-4h4v4" /></svg>;
+  return <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
+}
+
+function Feature({ type, title, children }: { type: "shield" | "brain" | "graph" | "document"; title: string; children: ReactNode }) {
+  return <div className="flex items-start gap-5"><div className="flex h-15 w-15 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-100 to-pink-50 text-rose-500"><Icon type={type} /></div><div><h3 className="text-[15px] font-semibold text-slate-900">{title}</h3><p className="mt-1 max-w-[265px] text-sm leading-6 text-slate-600">{children}</p></div></div>;
+}
+
+function Network() {
+  return <aside aria-hidden="true" className="pointer-events-none absolute right-0 top-[105px] hidden h-[650px] w-[350px] xl:block"><svg className="absolute inset-0 h-full w-full" viewBox="0 0 350 650" fill="none"><g stroke="#f9a8c2" strokeWidth="1.2" opacity=".65"><path d="m46 50 125 40 95-29 58 118-83 75 64 87-118 71-83-73-52 76 110 64 76-38 71 100-119 65-79-79-88 20"/><path d="m46 50 18 144 107-104 70 164-137 85m163-278-25 193 64 87m-123 71 42 126-90 46"/><path d="m64 194 177 60 69-75m-206 160 83 73 51-71m-83 73 82 125"/></g><g fill="#f43f75"><circle cx="46" cy="50" r="7"/><circle cx="64" cy="194" r="7"/><circle cx="171" cy="90" r="12"/><circle cx="241" cy="254" r="8"/><circle cx="104" cy="339" r="8"/><circle cx="187" cy="412" r="8"/><circle cx="309" cy="179" r="7"/><circle cx="119" cy="538" r="8"/><circle cx="238" cy="483" r="8"/><circle cx="119" cy="603" r="7"/></g><g fill="#c026a5"><circle cx="266" cy="61" r="8"/><circle cx="241" cy="341" r="18"/><circle cx="104" cy="414" r="8"/></g></svg><div className="absolute left-[147px] top-[132px] flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-pink-600 text-white shadow-lg shadow-rose-300"><Icon type="people" /></div><div className="absolute left-[138px] top-[328px] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white"><Icon type="building" /></div><div className="absolute right-[14px] top-[304px] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-rose-500 text-white"><Icon type="shield" /></div><span className="auth-node-label left-[70px] top-[43px]">Policies</span><span className="auth-node-label right-[8px] top-[100px]">Employees</span><span className="auth-node-label right-[41px] top-[290px]">Departments</span><span className="auth-node-label left-[21px] top-[508px]">Projects</span><span className="auth-node-label right-[16px] top-[594px]">Documents</span></aside>;
+}
+
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-app-gradient px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 via-rose-500 to-violet-500 text-xl font-bold text-white shadow-lg shadow-rose-200">
-            ✦
-          </div>
-          <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
-        </div>
-        <div className="rounded-2xl border border-rose-100 bg-white/90 p-6 shadow-[0_20px_60px_rgba(190,24,93,0.10)] backdrop-blur-sm">{children}</div>
-      </div>
-    </main>
-  );
+  const isRegister = title !== "Sign in";
+  const compact = !isRegister;
+  const welcome = isRegister ? "Build your workspace" : "Welcome back!";
+  const intro = isRegister ? "Create a secure knowledge workspace for your organization." : "Sign in to your workspace and continue exploring your organization’s knowledge graph.";
+  return <main className="auth-page relative min-h-screen overflow-hidden bg-[#fffaf8] px-6 py-7 sm:px-10 lg:px-12"><div className="auth-ambient auth-ambient-one"/><div className="auth-ambient auth-ambient-two"/><header className="relative z-10 flex items-center gap-4"><div className="flex h-15 w-15 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff5b76] to-[#e72878] text-white shadow-[0_12px_25px_rgba(235,50,115,.26)]"><Mark className="h-10 w-10" /></div><div><div className="text-[27px] font-bold leading-none tracking-tight text-slate-900">Graph RAG</div><div className="mt-1 text-[16px] text-rose-500">Tangible · Trusted · Intelligent</div></div></header><section className={`relative z-10 mx-auto grid max-w-[1430px] grid-cols-1 items-center gap-12 ${compact ? "pt-10 xl:pt-8" : "pt-16 xl:pt-14"} lg:grid-cols-[minmax(310px,1fr)_525px] xl:ml-0 xl:mr-[350px] xl:gap-16`}><div className="hidden lg:block"><h1 className="font-serif text-5xl font-bold tracking-tight text-slate-900">{welcome} <span className="font-sans text-4xl">👋</span></h1><p className="mt-5 max-w-[430px] text-lg leading-8 text-slate-600">{intro}</p><div className="mt-9 space-y-7"><Feature type="shield" title="Secure & Private">Enterprise-grade security with ACL and role-based access control.</Feature><Feature type="brain" title="AI-Powered Insights">Hybrid Graph RAG delivers accurate answers with explainable evidence.</Feature><Feature type="graph" title="Knowledge Graph">Visualize relationships between people, policies, projects and documents.</Feature><Feature type="document" title="Trusted Sources">Answers grounded in your authorized documents with citations.</Feature></div></div><div className="w-full"><div className={`relative rounded-[23px] border border-rose-300/90 bg-white/90 px-7 shadow-[0_26px_70px_rgba(173,62,94,.18)] backdrop-blur-md sm:px-12 ${compact ? "pb-7 pt-3" : "pb-9 pt-16"}`}><div className={`absolute left-1/2 flex h-[68px] w-[68px] -translate-x-1/2 items-center justify-center rounded-full bg-gradient-to-br from-rose-400 to-fuchsia-600 text-white shadow-[0_12px_22px_rgba(222,45,115,.35)] ${compact ? "-top-[78px]" : "-top-5"}`}><Icon type="lock" /></div><div className={`text-center ${compact ? "mb-6" : "mb-8"}`}><h2 className="font-serif text-3xl font-bold text-slate-900">{title}</h2>{subtitle && <p className="mt-2 text-[16px] text-slate-500">{subtitle}</p>}</div>{children}</div></div></section><Network/>{isRegister && <div className="relative z-10 mx-auto mt-7 max-w-[525px] text-center text-sm text-slate-500">Already have an account? <a href="/login" className="font-medium text-rose-500">Sign in</a></div>}<div className="absolute bottom-0 left-0 h-[168px] w-full bg-[radial-gradient(ellipse_at_0%_100%,rgba(244,63,117,.78),transparent_45%),radial-gradient(ellipse_at_15%_100%,rgba(251,146,180,.48),transparent_52%)] opacity-65"/><footer className={`${compact ? "relative z-10 mx-auto mt-8" : "absolute bottom-6 left-1/2 -translate-x-1/2"} z-10 hidden items-center gap-2 whitespace-nowrap text-sm text-slate-600 md:flex`}><Icon type="shield"/> Your data is protected. We never use your information to train AI models.</footer></main>;
 }

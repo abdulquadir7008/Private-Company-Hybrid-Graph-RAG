@@ -9,6 +9,34 @@ import MessageView from "@/components/MessageView";
 import { EmptyState, Alert, Spinner } from "@/components/ui";
 import type { ChatMessage, ChatResponse, Conversation } from "@/lib/types";
 
+function ChatContextPanel() {
+  return (
+    <aside className="hidden w-[325px] shrink-0 space-y-3 border-l border-rose-100 bg-white/45 p-4 xl:block">
+      <section className="rounded-2xl border border-rose-100 bg-white/85 p-4 shadow-[0_8px_26px_rgba(190,24,93,.05)]">
+        <h2 className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Answer summary</h2>
+        <p className="mt-3 text-sm leading-5 text-slate-600">Answers are grounded in the connected knowledge graph and your authorized documents.</p>
+        <h3 className="mt-3 text-xs font-semibold text-slate-800">Top departments</h3>
+        <div className="mt-2 space-y-1.5 text-[11px]"><ContextRow label="Engineering" value="14 people" tone="violet"/><ContextRow label="Human Resources" value="7 people" tone="rose"/><ContextRow label="IT Operations" value="6 people" tone="amber"/><ContextRow label="Finance" value="5 people" tone="green"/></div>
+      </section>
+      <section className="rounded-2xl border border-rose-100 bg-white/85 p-4 shadow-[0_8px_26px_rgba(190,24,93,.05)]">
+        <h2 className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Knowledge graph preview</h2>
+        <div className="relative mx-auto mt-3 h-48 max-w-[255px] overflow-hidden rounded-xl bg-[radial-gradient(circle_at_center,rgba(244,63,117,.12),transparent_37%)]">
+          <svg viewBox="0 0 255 190" className="absolute inset-0 h-full w-full" fill="none" stroke="#e9d5ff" strokeWidth="1.2"><path d="M39 55 128 27l89 28m-178 0 41 93 96 18 41-111M80 148l48-121 48 139" strokeDasharray="3 3"/></svg>
+          <span className="absolute left-1/2 top-20 flex h-16 w-16 -translate-x-1/2 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-pink-600 text-center text-[10px] font-semibold text-white shadow-lg shadow-rose-200">Remote<br/>Work Policy</span>
+          <span className="absolute left-[8px] top-[63px] rounded-full bg-emerald-50 px-2 py-1 text-[9px] text-emerald-600 ring-1 ring-emerald-200">Finance<br/>5 people</span><span className="absolute right-[1px] top-[64px] rounded-full bg-orange-50 px-2 py-1 text-[9px] text-orange-600 ring-1 ring-orange-200">IT Operations<br/>6 people</span><span className="absolute left-[90px] top-[2px] rounded-full bg-violet-50 px-2 py-1 text-[9px] text-violet-600 ring-1 ring-violet-200">Engineering<br/>14 people</span><span className="absolute left-[96px] bottom-[3px] rounded-full bg-rose-50 px-2 py-1 text-[9px] text-rose-600 ring-1 ring-rose-200">Human Resources<br/>7 people</span>
+        </div>
+        <button className="mt-2 w-full rounded-lg border border-rose-200 py-1.5 text-xs font-medium text-rose-500">⌘ Open in Graph Explorer</button>
+      </section>
+      <section className="rounded-2xl border border-rose-100 bg-white/85 p-4 shadow-[0_8px_26px_rgba(190,24,93,.05)]"><h2 className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Top sources</h2><div className="mt-3 space-y-3 text-xs text-slate-600"><p>▧ <span className="font-medium text-slate-800">Remote Work Policy</span><br/><span className="ml-4 text-[10px] text-slate-400">Policy Document · Updated recently</span></p><p>▧ <span className="font-medium text-slate-800">HR Policies Handbook</span><br/><span className="ml-4 text-[10px] text-slate-400">Document · Authorized source</span></p><p>▧ <span className="font-medium text-slate-800">Employee Guidelines</span><br/><span className="ml-4 text-[10px] text-slate-400">Document · Authorized source</span></p></div><button className="mt-3 text-xs font-medium text-rose-500">View all sources →</button></section>
+    </aside>
+  );
+}
+
+function ContextRow({ label, value, tone }: { label: string; value: string; tone: "violet" | "rose" | "amber" | "green" }) {
+  const tones = { violet: "bg-violet-50 text-violet-600", rose: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", green: "bg-emerald-50 text-emerald-600" };
+  return <div className="flex items-center justify-between"><span className={`rounded-md px-2 py-1 ${tones[tone]}`}>{label}</span><span className="rounded-full border border-slate-100 px-2 py-0.5 text-slate-500">{value}</span></div>;
+}
+
 export default function ChatPage() {
   useRequireAuth();
   const auth = useAuth();
@@ -155,7 +183,7 @@ export default function ChatPage() {
   if (!auth.token) return null;
 
   return (
-    <div className="flex h-full">
+    <div className="chat-workspace flex h-full bg-[#fffaf9]">
       <ChatSidebar
         conversations={conversations}
         activeId={activeId}
@@ -165,6 +193,7 @@ export default function ChatPage() {
         loading={loadingConv}
       />
       <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center justify-between border-b border-rose-100 bg-white/65 px-6 py-4"><div className="text-sm"><span className="font-semibold text-slate-900">Chat</span><span className="mx-2 text-slate-400">/</span><span className="text-slate-500">Authorized knowledge graph</span></div><div className="hidden gap-2 sm:flex"><span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-600">● ACL Enforced</span><span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-medium text-violet-600">✣ Explainable RAG</span><span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-600">⌘ Graph RAG</span></div></div>
         <div ref={threadRef} className="flex-1 overflow-y-auto px-6 py-6">
           {error && (
             <div className="mb-4">
@@ -180,7 +209,7 @@ export default function ChatPage() {
               hint="Questions are answered from your private knowledge graph with grounded citations — try one of the suggestions below."
             />
           ) : (
-            <div className="mx-auto max-w-3xl space-y-6">
+            <div className="mx-auto max-w-4xl space-y-6">
               {messages
                 .filter((m) => m.role === "user" || m.role === "assistant")
                 .map((m, idx) => {
@@ -239,9 +268,9 @@ export default function ChatPage() {
           </div>
         )}
 
-        <div className="border-t border-white/8 bg-base-900/60 p-4 backdrop-blur-md">
-          <div className="mx-auto max-w-3xl">
-            <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-base-900 px-3 py-2 transition focus-within:border-brand">
+        <div className="border-t border-rose-100 bg-white/70 p-4 backdrop-blur-md">
+          <div className="mx-auto max-w-4xl">
+            <div className="flex items-end gap-2 rounded-xl border border-rose-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(244,63,117,.08)] transition focus-within:border-brand">
               <textarea
                 ref={inputRef}
                 value={input}
@@ -270,6 +299,7 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+      <ChatContextPanel />
     </div>
   );
 }

@@ -44,34 +44,28 @@ export default function RegisterPage() {
   }
 
   return (
-    <AuthShell title="Create your workspace" subtitle="Your company gets an isolated knowledge graph">
-      <form onSubmit={onSubmit} className="space-y-4">
+    <AuthShell title="Create account" subtitle="Start your secure Graph RAG workspace">
+      <form onSubmit={onSubmit} className="auth-form space-y-4">
         {error && <Alert tone="rose">{error}</Alert>}
         <div>
           <Label>Full name</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} required />
+          <Input className="auth-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
         </div>
         <div>
           <Label>Work email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input className="auth-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" required />
         </div>
         <div>
           <Label>Company name</Label>
-          <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
+          <Input className="auth-input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Your company" required />
         </div>
         <div>
           <Label>Password (8+ characters)</Label>
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+          <Input className="auth-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} placeholder="Create a password" required />
         </div>
-        <Button type="submit" disabled={busy} className="w-full">
-          {busy ? "Creating…" : "Create workspace"}
+        <Button type="submit" disabled={busy} className="auth-submit w-full text-[17px]">
+          {busy ? "Creating…" : <>Create workspace <span className="ml-auto text-3xl font-light leading-none">→</span></>}
         </Button>
-        <div className="pt-1 text-center text-xs">
-          <span className="text-slate-500">Already have an account? </span>
-          <Link href="/login" className="text-indigo-400 hover:underline">
-            Sign in
-          </Link>
-        </div>
       </form>
     </AuthShell>
   );

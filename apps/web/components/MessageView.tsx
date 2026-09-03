@@ -124,7 +124,7 @@ export default function MessageView({
     <div>
       {/* Question */}
       <div className="flex flex-col items-end gap-1">
-        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-gradient-to-b from-pink-500 to-rose-500 px-4 py-2.5 text-sm text-white shadow-lg shadow-rose-200">{question}</div>
+        <div className="max-w-[80%] rounded-2xl rounded-br-sm border border-rose-200 bg-rose-50/80 px-4 py-2.5 text-sm text-slate-800 shadow-sm">{question}</div>
         {onEditQuestion && (
           <button onClick={() => onEditQuestion(question)} className="rounded-md px-2 py-1 text-xs text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
             Edit question
@@ -164,6 +164,15 @@ export default function MessageView({
         <div className="markdown-body whitespace-pre-wrap rounded-xl border border-white/10 bg-surface p-4">
           {withCitations(answer, citations)}
         </div>
+
+        {answer && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <InsightMetric icon="♟" value={entities.length || "—"} label="People" color="violet" />
+            <InsightMetric icon="♜" value={rels.length || "—"} label="Relationships" color="rose" />
+            <InsightMetric icon="⬟" value={grouped.length || "—"} label="Sources" color="amber" />
+            <InsightMetric icon="↗" value={typeof confidence === "number" ? `${Math.round(confidence * 100)}%` : "—"} label="Confidence" color="green" />
+          </div>
+        )}
 
         {/* Explainable RAG — "Why this answer?" */}
         {answer && (
@@ -280,4 +289,9 @@ export default function MessageView({
       </div>
     </div>
   );
+}
+
+function InsightMetric({ icon, value, label, color }: { icon: string; value: string | number; label: string; color: "violet" | "rose" | "amber" | "green" }) {
+  const tone = { violet: "bg-violet-50 text-violet-600", rose: "bg-rose-50 text-rose-500", amber: "bg-amber-50 text-amber-500", green: "bg-emerald-50 text-emerald-600" }[color];
+  return <div className="flex items-center gap-3 rounded-xl border border-rose-100 bg-white px-3 py-3"><span className={`flex h-9 w-9 items-center justify-center rounded-full ${tone}`}>{icon}</span><div><div className="text-lg font-semibold text-slate-900">{value}</div><div className="text-[11px] text-slate-500">{label}</div></div></div>;
 }

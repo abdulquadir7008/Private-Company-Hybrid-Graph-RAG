@@ -83,6 +83,25 @@ button, input, select, textarea {
   font: inherit;
 }
 
+/* Authentication screens follow the warm, editorial Graph RAG visual system. */
+.auth-page {
+  background-image: radial-gradient(circle at 42% 38%, rgba(255,255,255,.98), rgba(255,249,247,.55) 39%, transparent 67%), linear-gradient(135deg, #fffdf9 0%, #fff7f5 100%);
+}
+
+.auth-ambient { position: absolute; border-radius: 9999px; filter: blur(45px); pointer-events: none; }
+.auth-ambient-one { width: 520px; height: 520px; left: 22%; top: 15%; background: rgba(253, 164, 175, .14); }
+.auth-ambient-two { width: 390px; height: 390px; right: 5%; top: 22%; background: rgba(244, 114, 182, .10); }
+.auth-form label:not(:has(input)) { margin-bottom: .55rem; color: #171923; font-size: .92rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.auth-input { min-height: 58px; border-color: #e8e2e4; border-radius: 12px; padding: .75rem 1rem; font-size: 16px; box-shadow: 0 1px 2px rgba(15,23,42,.02); }
+.auth-input:focus { border-color: #f43f75; box-shadow: 0 0 0 4px rgba(244,63,117,.10); }
+.auth-submit { min-height: 60px; border-radius: 13px; background: linear-gradient(100deg, #ff3f66, #dd2785); box-shadow: 0 12px 22px rgba(231, 46, 112, .18); }
+.auth-google { min-height: 58px; border-color: #fecdd3; border-radius: 13px; }
+.auth-node-label { position: absolute; border-radius: 999px; background: rgba(255,255,255,.92); padding: 7px 15px; font-size: 13px; font-weight: 500; color: #171923; box-shadow: 0 5px 18px rgba(172, 88, 111, .08); }
+
+@media (max-width: 1023px) {
+  .auth-page { padding-bottom: 7rem; }
+}
+
 ::selection {
   background: rgba(244, 63, 117, 0.18);
   color: #9f1239;

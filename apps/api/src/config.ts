@@ -31,6 +31,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string().default("dev-only-insecure-secret-change-me"),
   JWT_EXPIRES_IN: z.string().default("1d"),
 
+  // AES-256-GCM key for encrypting per-user API keys at rest. Must be a
+  // 32-byte value (base64 or raw hex/utf8 accepted; auto-derived in dev).
+  APP_ENC_KEY: z.string().optional().default("dev-enc-key-change-me"),
+
   SENDGRID_API_KEY: z.string().optional().default(""),
   SENDGRID_FROM: z.string().optional().default(""),
 

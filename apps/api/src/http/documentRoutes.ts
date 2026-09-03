@@ -117,6 +117,21 @@ documentRoutes.get(
   })
 );
 
+/**
+ * Lightweight progress endpoint used by the provider-switch loading screen.
+ * It intentionally counts all tenant documents rather than paging through the
+ * document list, so a large workspace cannot report completion prematurely.
+ */
+documentRoutes.get(
+  "/reindex-status",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const p = requireCompanyPrincipal(req);
+    const processing = await prisma.document.count({ where: { companyId: p.companyId, status: "PROCESSING" } });
+    res.json({ processing, complete: processing === 0 });
+  })
+);
+
 documentRoutes.get(
   "/:id",
   requireAuth,
@@ -271,6 +286,23 @@ documentRoutes.delete(
       requestId: req.requestId
     });
     res.json({ ok: true });
+  })
+);
+
+/**
+ * POST /documents/reindex-all — reindex every document in the company.
+ * Triggered automatically when the active LLM provider's embedding model changes.
+ * Fire-and-forget: returns 202 immediately; documents reindex in the background.
+ */
+documentRoutes.post(
+  "/reindex-all",
+  requireAuth,
+ asyncHandler(async (req, res) => {
+    const p = requireCompanyPrincipal(req);
+    // Wait only until the batch is registered and documents are marked
+    // PROCESSING; each document continues indexing in the background.
+    await ingestionPipeline.reindexAll(p.companyId, p.userId);
+    res.status(202).json({ ok: true, message: "Reindexing all documents" });
   })
 );
 

@@ -13,6 +13,7 @@
     "prisma:generate": "prisma generate --schema prisma/schema.prisma"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
     "@graphrag/shared": "*",
     "@huggingface/inference": "^4.13.24",
     "@prisma/client": "^5.22.0",

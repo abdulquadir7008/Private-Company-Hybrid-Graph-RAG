@@ -1,6 +1,6 @@
 import type { GroundedAnswer } from "@graphrag/shared";
 import type { HybridResult } from "../retrieval/hybrid.js";
-import { chatCompletion, type ChatMessage } from "../ai/llm.js";
+import { chatCompletion, currentLlmConfigured, type ChatMessage } from "../ai/llm.js";
 import { buildContext } from "./context.js";
 import { buildCitations } from "./citations.js";
 import { config } from "../config.js";
@@ -47,8 +47,9 @@ export async function generateGroundedAnswer(input: GenerateInput): Promise<Grou
     ? `CONVERSATION HISTORY:\n${input.history.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n")}`
     : "No conversation history.";
 
-  // Deterministic fallback when no LLM provider key is configured (local demo).
-  if (!config.hasLLM) {
+  // Deterministic fallback when no LLM provider is available (no per-user
+  // provider configured and no global key). Avoids calling a broken provider.
+  if (!currentLlmConfigured() && !config.hasLLM) {
     return fallbackAnswer(input, citations);
   }
 

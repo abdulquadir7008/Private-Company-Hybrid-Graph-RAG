@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { useAuth, useRequireAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/Toast";
 import GraphCanvas, { colorFor, type CanvasEdge, type CanvasNode } from "@/components/GraphCanvas";
@@ -180,13 +180,15 @@ export default function GraphPage() {
 
       if (res.queryPlan) setShowPlan(false);
     } catch (err) {
-      const msg = (err as Error).message;
-      // Friendly, non-leaking error mapping.
-      if (/No authorized entity matched|too broad|too many|translate|temporarily/i.test(msg)) {
-        setAiError(msg);
-      } else {
-        setAiError("Graph query generation is temporarily unavailable. Please try again.");
-      }
+      const apiError = err instanceof ApiError ? err : null;
+      // The API returns safe, actionable messages for query planning errors
+      // (including a misconfigured or unreachable user-owned provider). Keep
+      // them visible instead of hiding them behind a generic retry message.
+      setAiError(
+        apiError?.status === 0
+          ? "Cannot reach the API server. Check that it is running and try again."
+          : apiError?.message || "Graph query generation failed. Please try again."
+      );
     } finally {
       board.forEach(clearTimeout);
       setAiLoadingStage(null);

@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { Panel } from "@/components/ui";
+import { Panel, Badge } from "@/components/ui";
+import { LlmSetupModal } from "@/components/LlmSetupModal";
 
 type IconNode = React.ReactNode;
 
@@ -92,6 +93,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [showLlmSettings, setShowLlmSettings] = useState(false);
+  const [skipSetupForSession, setSkipSetupForSession] = useState(false);
+
+  const showSetup = auth.needsLlmSetup && !skipSetupForSession;
+  const dismissLlm = () => {
+    setShowLlmSettings(false);
+    if (auth.needsLlmSetup) setSkipSetupForSession(true);
+  };
 
   if (auth.loading || !auth.token) {
     return (
@@ -181,6 +190,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           {!collapsed && (
             <div className="mt-2 space-y-0.5">
+              <button
+                onClick={() => setShowLlmSettings(true)}
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </svg>
+                Manage API provider
+                {auth.needsLlmSetup && <Badge tone="amber">setup</Badge>}
+              </button>
               <Link
                 href="/change-password"
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-slate-500 transition hover:bg-white/5 hover:text-slate-200"
@@ -242,6 +261,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <MobileNavItem href="/graph" label="Graph" icon={GraphIcon} active={isActive("/graph")} />
         {auth.isAdmin && <MobileNavItem href="/admin" label="Admin" icon={ShieldIcon} active={isActive("/admin")} />}
       </nav>
+
+      {/* LLM / API provider setup — shown after first login when none is active,
+          and reopenable from the sidebar ("Manage API"). */}
+      {(showSetup || showLlmSettings) && <LlmSetupModal onDismiss={dismissLlm} />}
+
+      {/* Full-screen overlay shown while documents are re-indexed after a
+          provider / embedding-model change. */}
+      {auth.reindexing && (
+        <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-4 bg-slate-900/70 backdrop-blur-sm">
+          <span className="h-10 w-10 animate-spin rounded-full border-4 border-rose-300 border-t-rose-600" />
+          <div className="text-center">
+            <p className="text-sm font-semibold text-white">Reindexing your documents…</p>
+            <p className="mt-1 text-xs text-slate-300">
+              We are re-embedding your knowledge graph with the new AI provider. This may take a moment.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -145,7 +145,7 @@ export async function generateGraphQueryPlan(question: string): Promise<GraphQue
     // Surface this honestly instead of the misleading "couldn't translate".
     logger.warn("graph ai-query LLM failure", { err: err instanceof Error ? err.message : String(err) });
     throw new GraphQueryError(
-      "AI answer generation is temporarily unavailable. Please try again in a moment.",
+      "Your AI provider could not be reached (check your API key or plan credits), or no provider is configured. Open Manage API provider to set one up.",
       "AI_UNAVAILABLE"
     );
   }

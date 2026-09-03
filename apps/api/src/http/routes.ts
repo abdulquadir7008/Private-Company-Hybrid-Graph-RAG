@@ -5,6 +5,7 @@ import { chatRoutes } from "./chatRoutes.js";
 import { graphRoutes } from "./graphRoutes.js";
 import { adminRoutes } from "./adminRoutes.js";
 import { rootRoutes } from "./rootRoutes.js";
+import { llmRoutes } from "./llmRoutes.js";
 
 export const apiRouter = Router();
 
@@ -18,6 +19,7 @@ apiRouter.use("/chat", chatRoutes);
 apiRouter.use("/conversations", chatRoutes);
 apiRouter.use("/graph", graphRoutes);
 apiRouter.use("/admin", adminRoutes);
+apiRouter.use("/llm", llmRoutes);
 
 // Suggested questions for the chat home.
 apiRouter.use("/suggested", chatRoutes);

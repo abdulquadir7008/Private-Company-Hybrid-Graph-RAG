@@ -15,6 +15,7 @@ import { AppError, ConflictError, ValidationError } from "../errors.js";
 import { requireAuth, principalOf } from "../access/middleware.js";
 import { uniqueSlug } from "../util/slug.js";
 import { auditor } from "../audit/service.js";
+import { toState } from "./llmRoutes.js";
 
 export const authRoutes = Router();
 
@@ -154,7 +155,8 @@ authRoutes.post(
         name: user.name,
         department: user.department,
         roles: user.roles.map((r) => r.role)
-      }
+      },
+      llmConfig: toState({ activeLlmProvider: user.activeLlmProvider, llmConfig: user.llmConfig })
     });
   })
 );
@@ -251,7 +253,17 @@ authRoutes.get(
     }
     const user = await prisma.user.findUnique({
       where: { id: p.userId },
-      include: { company: { select: { id: true, name: true, status: true } }, roles: { select: { role: true } } }
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        department: true,
+        roles: { select: { role: true } },
+        company: { select: { id: true, name: true, status: true } },
+        mustChangePassword: true,
+        activeLlmProvider: true,
+        llmConfig: true
+      }
     });
     throwerIfNull(user);
     res.json({
@@ -261,7 +273,8 @@ authRoutes.get(
       department: user.department,
       roles: user.roles.map((r) => r.role),
       company: user.company,
-      mustChangePassword: user.mustChangePassword
+      mustChangePassword: user.mustChangePassword,
+      llmConfig: toState({ activeLlmProvider: user.activeLlmProvider, llmConfig: user.llmConfig })
     });
   })
 );

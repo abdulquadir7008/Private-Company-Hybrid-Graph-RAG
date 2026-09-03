@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { Principal } from "@graphrag/shared";
 import { prisma } from "../db.js";
 import { asyncHandler } from "../util/asyncHandler.js";
 import { requireAuth, requireCompanyPrincipal } from "../access/middleware.js";
@@ -7,10 +8,11 @@ import { hybridRetrieve } from "../retrieval/hybrid.js";
 import { generateGroundedAnswer } from "../answer/generate.js";
 import { buildExplanation } from "../answer/explanation.js";
 import { condenseQuestion } from "../conversations/condense.js";
-import { getOrCreateConversation, appendMessage, listConversations, getConversation, updateConversationTitle } from "../conversations/repository.js";
+import { getOrCreateConversation, appendMessage, listConversations, getConversation, updateConversationTitle, deleteConversation } from "../conversations/repository.js";
 import { Auditor } from "../audit/service.js";
 import { ValidationError, NotFoundError } from "../errors.js";
 import { uuid } from "../util/ids.js";
+import { withLlmUser } from "../ai/llm.js";
 
 export const chatRoutes = Router();
 
@@ -29,8 +31,22 @@ chatRoutes.post(
     if (!parsed.success) throw new ValidationError("Question is required", "question");
     const { question, conversationId, depth } = parsed.data;
 
-    const start = performance.now();
-    const conversation = await getOrCreateConversation(p, conversationId);
+    // Resolve + bind the caller's own LLM provider for the whole request.
+    await withLlmUser(p.userId, async () => {
+      await handleChat(req, res, p, { question, conversationId, depth });
+    });
+  })
+);
+
+async function handleChat(
+  req: Parameters<Parameters<typeof chatRoutes.post>[1]>[0],
+  res: Parameters<Parameters<typeof chatRoutes.post>[1]>[1],
+  p: Principal & { companyId: string },
+  opts: { question: string; conversationId?: string; depth?: number }
+): Promise<void> {
+  const { question, conversationId, depth } = opts;
+  const start = performance.now();
+  const conversation = await getOrCreateConversation(p, conversationId);
     const history = conversation.messages
       .filter((m) => m.role === "user" || m.role === "assistant")
       .slice(-8)
@@ -104,8 +120,7 @@ chatRoutes.post(
       explanation: explanation,
       retrievalMeta: { plan: hybrid.plan, stats: hybrid.retrievalMeta }
     });
-  })
-);
+}
 
 chatRoutes.get(
   "/conversations",
@@ -123,6 +138,23 @@ chatRoutes.get(
     const p = requireCompanyPrincipal(req);
     const conversation = await getConversation(p, req.params.id);
     res.json(conversation);
+  })
+);
+
+chatRoutes.delete(
+  "/conversations/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const p = requireCompanyPrincipal(req);
+    await deleteConversation(p, req.params.id);
+    await new Auditor().record({
+      companyId: p.companyId,
+      userId: p.userId,
+      action: "CONVERSATION_DELETE",
+      detail: { conversationId: req.params.id },
+      requestId: req.requestId
+    });
+    res.json({ ok: true });
   })
 );
 

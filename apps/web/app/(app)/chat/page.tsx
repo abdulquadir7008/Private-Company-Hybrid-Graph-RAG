@@ -23,6 +23,7 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const loadingRef = useRef(false);
 
   const loadConversations = useCallback(async () => {
@@ -76,6 +77,27 @@ export default function ChatPage() {
     setMessages([]);
     setError(null);
     setInput("");
+  }
+
+  async function deleteConversation(id: string) {
+    const conversation = conversations.find((item) => item.id === id);
+    if (!window.confirm(`Delete “${conversation?.title || "this conversation"}”? This cannot be undone.`)) return;
+    try {
+      await apiFetch(`/chat/conversations/${id}`, { method: "DELETE", token: auth.token });
+      const remaining = conversations.filter((item) => item.id !== id);
+      setConversations(remaining);
+      if (activeId === id) {
+        newChat();
+        if (remaining[0]) await openConversation(remaining[0].id);
+      }
+    } catch (err) {
+      toast({ type: "error", message: (err as ApiError).message ?? "Could not delete conversation" });
+    }
+  }
+
+  function editQuestion(question: string) {
+    setInput(question);
+    requestAnimationFrame(() => inputRef.current?.focus());
   }
 
   async function send(text?: string) {
@@ -138,6 +160,7 @@ export default function ChatPage() {
         conversations={conversations}
         activeId={activeId}
         onSelect={openConversation}
+        onDelete={(id) => void deleteConversation(id)}
         onNew={newChat}
         loading={loadingConv}
       />
@@ -164,7 +187,7 @@ export default function ChatPage() {
                   if (m.role === "user") {
                     const next = messages[idx + 1];
                     if (next && next.role === "assistant") return null;
-                    return <MessageView key={m.id} question={m.content} answer="" />;
+                    return <MessageView key={m.id} question={m.content} answer="" onEditQuestion={editQuestion} />;
                   }
                   const prev = messages[idx - 1];
                   return (
@@ -186,6 +209,7 @@ export default function ChatPage() {
                           : null
                       }
                       entities={(m.retrievalMeta as { plan?: { detectedEntities?: string[] } } | null)?.plan?.detectedEntities}
+                      onEditQuestion={editQuestion}
                     />
                   );
                 })}
@@ -219,6 +243,7 @@ export default function ChatPage() {
           <div className="mx-auto max-w-3xl">
             <div className="flex items-end gap-2 rounded-xl border border-white/10 bg-base-900 px-3 py-2 transition focus-within:border-brand">
               <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {

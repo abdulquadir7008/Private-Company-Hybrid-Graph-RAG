@@ -21,6 +21,7 @@ interface Props {
   token?: string | null;
   explanation?: AnswerExplanation | null;
   explanationId?: string | null;
+  onEditQuestion?: (question: string) => void;
 }
 
 export function renderMarkdownLinks(text: string): string {
@@ -84,7 +85,8 @@ export default function MessageView({
   createdAt,
   token,
   explanation,
-  explanationId
+  explanationId,
+  onEditQuestion
 }: Props) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
@@ -121,8 +123,13 @@ export default function MessageView({
   return (
     <div>
       {/* Question */}
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
         <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-gradient-to-b from-pink-500 to-rose-500 px-4 py-2.5 text-sm text-white shadow-lg shadow-rose-200">{question}</div>
+        {onEditQuestion && (
+          <button onClick={() => onEditQuestion(question)} className="rounded-md px-2 py-1 text-xs text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
+            Edit question
+          </button>
+        )}
       </div>
 
       {/* Answer */}

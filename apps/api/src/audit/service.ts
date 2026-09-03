@@ -22,7 +22,9 @@ export type AuditAction =
   | "GRAPH_PATH_VIEW"
   | "GRAPH_AI_QUERY"
   | "FEEDBACK"
-  | "CONVERSATION_DELETE";
+  | "CONVERSATION_DELETE"
+  | "LLM_CONFIG_CHANGE"
+  | "LLM_CONFIG_TEST";
 
 export interface AuditRecord {
   companyId?: string | null;

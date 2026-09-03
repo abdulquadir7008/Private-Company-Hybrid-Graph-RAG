@@ -14,6 +14,7 @@ import type { ExplanationGraphPath, GraphQueryPlan } from "@graphrag/shared";
 import { NotFoundError } from "../errors.js";
 import { detectGraphQuery, generateGraphQueryPlan, executeGraphQueryPlan, GraphQueryError } from "../graph/aiQuery.js";
 import type { AiQueryResult } from "../graph/aiQuery.js";
+import { withLlmUser } from "../ai/llm.js";
 
 export const graphRoutes = Router();
 
@@ -345,7 +346,7 @@ graphRoutes.post(
     // Branch B: natural-language graph question.
     let plan: GraphQueryPlan | null;
     try {
-      plan = await generateGraphQueryPlan(question);
+      plan = await withLlmUser(p.userId, () => generateGraphQueryPlan(question));
     } catch (err) {
       if (err instanceof GraphQueryError && err.code === "AI_UNAVAILABLE") {
         return res.status(503).json({ error: err.message, code: "AI_UNAVAILABLE" });

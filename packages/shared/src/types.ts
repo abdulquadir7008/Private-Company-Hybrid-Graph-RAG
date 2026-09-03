@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ENTITY_TYPES, RELATIONSHIP_TYPES, type EntityType, type RelationshipType } from "./ontology.js";
+import type { LlmProviderId } from "./llm.js";
 
 /* ------------------------------------------------------------------ *
  * Roles / permissions
@@ -263,3 +264,40 @@ export interface Paginated<T> {
   page: number;
   pageSize: number;
 }
+
+/* ------------------------------------------------------------------ *
+ * Per-user LLM/API provider configuration
+ * ------------------------------------------------------------------ */
+
+/** Saved config for a single provider (apiKey stored as an opaque string). */
+export interface SavedLlmProviderConfig {
+  provider: LlmProviderId;
+  apiKey?: string;
+  model: string;
+  embeddingModel?: string;
+  baseUrl?: string;
+}
+
+/**
+ * What a provider/config returns to the client. The API key itself is NEVER
+ * exposed (only whether the provider has been configured). The `save`
+ * payload echoes back the same shape and the client replaces its own copy.
+ */
+export interface LlmConfigStateItem {
+  provider: LlmProviderId;
+  configured: boolean;
+  model: string;
+  embeddingModel?: string;
+  baseUrl?: string;
+}
+
+export interface LlmConfigState {
+  activeProvider: LlmProviderId | null;
+  providers: Record<LlmProviderId, LlmConfigStateItem>;
+  /** True when saving changed the embedding model and a reindex is underway. */
+  reindexing?: boolean;
+}
+
+/** Allowed cost tiers for the model dropdown filter. */
+export const MODEL_TIER_FILTERS: ModelTierSummary[] = ["free", "freetier", "paid", "all"] as const;
+export type ModelTierSummary = "free" | "freetier" | "paid" | "all";

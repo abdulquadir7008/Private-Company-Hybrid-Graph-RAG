@@ -15,15 +15,30 @@ import { upsertEntity, upsertRelationship, upsertDocumentChunkProvenance, linkCh
 import { getChunkAcl, getDocumentAcl } from "../access/aclRepository.js";
 import { aclToChromaFlags } from "../access/policy.js";
 import { upsertChunkVector, deleteChunkVector } from "../vector/chroma.js";
-import { embedTexts } from "../ai/llm.js";
+import { embedTexts, loadUserEmbeddingConfig, providerFromConfig, withLlmUser } from "../ai/llm.js";
 import { AppError, NotFoundError } from "../errors.js";
 import { graphStats } from "../graph/repository.js";
 
 export class IngestionPipeline {
-  async ingest(documentId: string, companyId: string): Promise<void> {
+  /**
+   * Resolve the embedding model name for a given user from their active LLM
+   * provider config. Falls back to the env default when no user config exists.
+   */
+  async #resolveEmbeddingModel(userId?: string): Promise<string> {
+    if (userId) {
+      const cfg = await loadUserEmbeddingConfig(userId);
+      if (cfg) {
+        const provider = providerFromConfig(cfg);
+        return provider.emodel;
+      }
+    }
+    return config.OPENAI_EMBEDDING_MODEL;
+  }
+
+  async ingest(documentId: string, companyId: string, userId?: string): Promise<void> {
     const job = await this.createJob(documentId, companyId);
     try {
-      await this.#run(documentId, companyId, job.id);
+      await this.#run(documentId, companyId, job.id, userId);
     } catch (err) {
       await prisma.ingestionJob.update({
         where: { id: job.id },
@@ -47,12 +62,14 @@ export class IngestionPipeline {
     });
   }
 
-  async #run(documentId: string, companyId: string, jobId: string): Promise<void> {
+  async #run(documentId: string, companyId: string, jobId: string, userId?: string): Promise<void> {
     const doc = await prisma.document.findUnique({ where: { id: documentId } });
     if (!doc) throw new NotFoundError("Document not found");
 
     await prisma.document.update({ where: { id: documentId }, data: { status: "PROCESSING" } });
     await prisma.ingestionJob.update({ where: { id: jobId }, data: { stage: "extract", progress: 10 } });
+
+    const embeddingModel = await this.#resolveEmbeddingModel(userId);
 
     const storagePath = this.resolveStoragePath(doc);
     const extracted = await extractTextFromFile(storagePath, doc.mimeType, doc.originalName);
@@ -81,7 +98,7 @@ export class IngestionPipeline {
           section: c.section,
           pageStart: c.pageStart,
           pageEnd: c.pageEnd,
-          embeddingVersion: config.OPENAI_EMBEDDING_MODEL
+          embeddingVersion: embeddingModel
         }
       });
       pgChunks.push(created);
@@ -282,6 +299,37 @@ export class IngestionPipeline {
     // Graph cleanup handled by graph repo (deleteDocumentSubgraph) — deferred.
     const { deleteDocumentSubgraph } = await import("../graph/repository.js");
     await deleteDocumentSubgraph(companyId, documentId);
+  }
+
+  /**
+   * Start a company-wide reindex after a provider/embedding-model change.
+   *
+   * The PROCESSING state is written before this method resolves. This is
+   * important to callers that show a blocking progress view: they can safely
+   * begin polling as soon as the API response arrives without racing the
+   * background ingestion tasks.
+   */
+  async reindexAll(companyId: string, userId: string): Promise<void> {
+    const docs = await prisma.document.findMany({
+      where: { companyId, status: { in: ["INDEXED", "FAILED"] } },
+      select: { id: true }
+    });
+
+    if (docs.length > 0) {
+      await prisma.document.updateMany({
+        where: { id: { in: docs.map((doc) => doc.id) } },
+        data: { status: "PROCESSING", failureReason: null }
+      });
+    }
+
+    logger.info("reindexAll triggered", { meta: { companyId, documentCount: docs.length } });
+    for (const doc of docs) {
+      // Bind the user's provider into the async context so embedTexts /
+      // extractFromChunk use the newly activated embedding + chat models.
+      withLlmUser(userId, () => this.ingest(doc.id, companyId, userId)).catch((err) => {
+        logger.warn("reindexAll: document reindex failed", { err, meta: { documentId: doc.id } });
+      });
+    }
   }
 
   async #updateGraphStats(companyId: string): Promise<void> {

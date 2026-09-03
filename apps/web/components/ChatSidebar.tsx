@@ -7,12 +7,14 @@ export default function ChatSidebar({
   conversations,
   activeId,
   onSelect,
+  onDelete,
   onNew,
   loading
 }: {
   conversations: Conversation[];
   activeId?: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
   onNew: () => void;
   loading?: boolean;
 }) {
@@ -39,18 +41,29 @@ export default function ChatSidebar({
           <div className="px-3 py-2 text-xs text-slate-500">No conversations yet.</div>
         )}
         {conversations.map((c) => (
-          <button
+          <div
             key={c.id}
-            onClick={() => onSelect(c.id)}
-            className={`mb-1 block w-full rounded-lg px-3 py-2 text-left transition ${
+            className={`group mb-1 flex w-full items-center gap-1 rounded-lg pr-1 transition ${
               c.id === activeId
                 ? "bg-gradient-to-r from-rose-100 to-pink-50 text-rose-600 ring-1 ring-inset ring-rose-200"
                 : "text-slate-500 hover:bg-rose-50 hover:text-rose-600"
             }`}
           >
-            <div className="truncate text-sm font-medium">{c.title || "New conversation"}</div>
-            <div className="mt-0.5 text-[11px] text-slate-600">{formatDate(c.updatedAt)}</div>
-          </button>
+            <button onClick={() => onSelect(c.id)} className="min-w-0 flex-1 px-3 py-2 text-left">
+              <div className="truncate text-sm font-medium">{c.title || "New conversation"}</div>
+              <div className="mt-0.5 text-[11px] text-slate-600">{formatDate(c.updatedAt)}</div>
+            </button>
+            <button
+              onClick={() => onDelete(c.id)}
+              aria-label={`Delete ${c.title || "conversation"}`}
+              title="Delete conversation"
+              className="mr-1 rounded-md p-1.5 text-slate-400 opacity-0 transition hover:bg-rose-100 hover:text-rose-600 focus:opacity-100 group-hover:opacity-100"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+              </svg>
+            </button>
+          </div>
         ))}
       </div>
     </div>

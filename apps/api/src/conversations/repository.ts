@@ -79,3 +79,9 @@ export async function getConversation(principal: Principal & { companyId: string
 export async function updateConversationTitle(conversationId: string, title: string) {
   return prisma.conversation.update({ where: { id: conversationId }, data: { title } });
 }
+
+/** Delete one user's private conversation (its messages cascade in the DB). */
+export async function deleteConversation(principal: Principal & { companyId: string }, conversationId: string) {
+  await getConversation(principal, conversationId);
+  await prisma.conversation.delete({ where: { id: conversationId } });
+}

@@ -143,6 +143,12 @@ model User {
   updatedAt           DateTime             @updatedAt
   uploadedDocuments   Document[]
 
+  // Per-user LLM/API provider config: the currently-activated provider plus
+  // per-provider saved settings (apiKey is encrypted at rest). API keys are
+  // never returned to the client.
+  activeLlmProvider String?
+  llmConfig         Json?
+
   @@index([companyId])
 }
 

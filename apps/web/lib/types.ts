@@ -10,6 +10,7 @@ export interface MeUser {
   company?: { id: string; name: string; status: string } | null;
   mustChangePassword?: boolean;
   isRootAdmin?: boolean;
+  llmConfig?: LlmConfigState;
 }
 
 export interface LoginResponse {
@@ -22,6 +23,7 @@ export interface LoginResponse {
     department?: string | null;
     roles: string[];
   };
+  llmConfig?: LlmConfigState;
 }
 
 export interface Citation {
@@ -379,4 +381,60 @@ export interface AnswerExplanation {
     afterReranking: number;
     usedForAnswer: number;
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Per-user LLM/API provider config (mirrors of the API contract)
+ * ------------------------------------------------------------------ */
+
+export type LlmProviderId = "openai" | "anthropic" | "groq" | "huggingface" | "ollama" | "gemini";
+
+export type ModelTier = "free" | "freetier" | "paid";
+export type LlmProviderTier = "freetier" | "paid" | "local";
+
+export interface LlmModel {
+  id: string;
+  name: string;
+  tier: ModelTier;
+  supportsEmbedding: boolean;
+  contextTokens?: number;
+}
+
+export interface LlmProviderMeta {
+  id: LlmProviderId;
+  label: string;
+  description: string;
+  tier: LlmProviderTier;
+  apiKeyLabel: string;
+  apiKeyUrl?: string;
+  needsApiKey: boolean;
+  openAiCompatibleBaseUrl?: string;
+  anthropicSdk?: boolean;
+  huggingFaceSdk?: boolean;
+  supportsEmbedding: boolean;
+  defaultEmbeddingModel?: string;
+  models: LlmModel[];
+}
+
+export interface LlmConfigStateItem {
+  provider: LlmProviderId;
+  configured: boolean;
+  model: string;
+  embeddingModel?: string;
+  baseUrl?: string;
+}
+
+export interface LlmConfigState {
+  activeProvider: LlmProviderId | null;
+  providers: Partial<Record<LlmProviderId, LlmConfigStateItem>>;
+  /** True when saving changed the embedding model and a reindex is underway. */
+  reindexing?: boolean;
+}
+
+export interface LlmTestResult {
+  ok: boolean;
+  provider?: LlmProviderId;
+  model?: string;
+  message?: string;
+  error?: string;
 }

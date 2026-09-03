@@ -12,10 +12,14 @@ interface AuthContextValue {
   user: MeUser | null;
   loading: boolean;
   isAdmin: boolean;
+  needsLlmSetup: boolean;
+  reindexing: boolean;
+  setReindexing: (v: boolean) => void;
   login: (email: string, password: string) => Promise<void>;
   loginWithToken: (token: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
+  setLlmConfigState: (state: import("@/lib/types").LlmConfigState) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -24,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reindexing, setReindexing] = useState(false);
 
   const hydrate = useCallback(async (raw: string | null) => {
     if (!raw) {
@@ -69,7 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
     setToken(res.token);
-    setUser({ ...res.user, mustChangePassword: res.mustChangePassword });
+    setUser({ ...res.user, mustChangePassword: res.mustChangePassword, llmConfig: res.llmConfig });
   }, []);
 
   const loginWithToken = useCallback(async (raw: string) => {
@@ -109,18 +114,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token]);
 
+  const setLlmConfigState = useCallback(
+    (state: import("@/lib/types").LlmConfigState) => {
+      setUser((u) => (u ? { ...u, llmConfig: state } : u));
+    },
+    []
+  );
+
+  const setReindexingState = useCallback((v: boolean) => {
+    setReindexing(v);
+  }, []);
+
+  const needsLlmSetup = user ? !user.llmConfig?.activeProvider : false;
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
       user,
       loading,
       isAdmin: user?.roles?.includes("ADMIN") ?? user?.isRootAdmin ?? false,
+      needsLlmSetup,
+      reindexing,
+      setReindexing: setReindexingState,
       login,
       loginWithToken,
       logout,
-      refresh
+      refresh,
+      setLlmConfigState
     }),
-    [token, user, loading, login, loginWithToken, logout, refresh]
+    [token, user, loading, needsLlmSetup, reindexing, setReindexingState, login, loginWithToken, logout, refresh, setLlmConfigState]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -5,6 +5,7 @@ import { buildContext } from "./context.js";
 import { buildCitations } from "./citations.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
+import { detectLanguage, isNonEnglish } from "../retrieval/languageDetect.js";
 
 export interface GenerateInput {
   question: string;
@@ -53,9 +54,15 @@ export async function generateGroundedAnswer(input: GenerateInput): Promise<Grou
     return fallbackAnswer(input, citations);
   }
 
+  // Determine the language the user is writing in, so the answer follows it.
+  const userLang = detectLanguage(input.question);
+  const languageInstruction = isNonEnglish(userLang)
+    ? `\nThe user asked in ${userLang === "hinglish" ? "Hindi/Hinglish" : userLang === "hi" ? "Hindi (Devanagari)" : "Hindi-English mixed"} language. Answer in the SAME natural style the user used (Hinglish/Hindi), keeping entity names and technical terms in English where natural.`
+    : "";
+
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_INSTRUCTIONS },
-    { role: "user", content: `${historyTurn}\n\nUSER QUESTION: ${input.question}\n\nCONTEXT TO ANSWER FROM (authorized data only):\n\n${context}` }
+    { role: "user", content: `${historyTurn}\n\nUSER QUESTION: ${input.question}\n\nCONTEXT TO ANSWER FROM (authorized data only):\n\n${context}\n\n${languageInstruction}` }
   ];
 
   let raw: string;

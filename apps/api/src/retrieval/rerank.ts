@@ -10,6 +10,13 @@ import { logger } from "../logger.js";
  * orders plus source-type weights, so vector / graph / keyword evidence are
  * merged into one unified, relevance-ordered list.
  *
+ * `pathEvidence` is intentionally excluded from the fusion: path items are
+ * derived duplicates of graph relationships (they share the same `rel:{id}`)
+ * and fusing them double-counts the graph evidence, which crowds real
+ * document chunks out of the final top-K and leaves the answer context with
+ * no document text. Paths are still surfaced to the answer builder directly,
+ * it just does not affect the fused rank orders.
+ *
  * Optional (RERANK_MODE=llm): a cheap LLM re-score pass over the top candidates.
  */
 
@@ -59,7 +66,6 @@ export function fusedScores(groups: {
   contribute(groups.vector, "vector", SOURCE_WEIGHT.vector);
   contribute(groups.graph, "graph", SOURCE_WEIGHT.graph);
   contribute(groups.keyword, "keyword", SOURCE_WEIGHT.keyword);
-  contribute(groups.paths, "path", SOURCE_WEIGHT.path);
 
   return Array.from(fused.entries())
     .map(([id, v]) => ({
@@ -94,7 +100,6 @@ export function rerankEvidence(groups: {
   contribute(groups.vector, SOURCE_WEIGHT.vector);
   contribute(groups.graph, SOURCE_WEIGHT.graph);
   contribute(groups.keyword, SOURCE_WEIGHT.keyword);
-  contribute(groups.paths, SOURCE_WEIGHT.path);
   void config;
 
   const ranked = Array.from(fused.values())

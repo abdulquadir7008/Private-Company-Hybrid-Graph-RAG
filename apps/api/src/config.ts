@@ -20,13 +20,17 @@ const envSchema = z.object({
   CHROMA_TENANT: z.string().optional().default(""),
   CHROMA_DATABASE: z.string().optional().default(""),
 
-  AI_PROVIDER: z.enum(["openai", "huggingface"]).default("openai"),
+  AI_PROVIDER: z.enum(["openai", "huggingface", "nvidia"]).default("openai"),
   OPENAI_API_KEY: z.string().optional().default(""),
   OPENAI_CHAT_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_EMBEDDING_MODEL: z.string().default("text-embedding-3-small"),
   HUGGINGFACE_API_KEY: z.string().optional().default(""),
   HUGGINGFACE_CHAT_MODEL: z.string().default("meta-llama/Llama-3.3-70B-Instruct"),
   HUGGINGFACE_EMBEDDING_MODEL: z.string().default("sentence-transformers/all-MiniLM-L6-v2"),
+  NVIDIA_API_KEY: z.string().optional().default(""),
+  NVIDIA_BASE_URL: z.string().default("https://integrate.api.nvidia.com/v1"),
+  NVIDIA_CHAT_MODEL: z.string().default("nvidia/llama-3.3-nemotron-super-49b-v1"),
+  NVIDIA_EMBEDDING_MODEL: z.string().default("nvidia/llama-nemotron-embed-1b-v2"),
 
   JWT_SECRET: z.string().default("dev-only-insecure-secret-change-me"),
   JWT_EXPIRES_IN: z.string().default("1d"),
@@ -68,14 +72,18 @@ export const config = {
   isDemoSetupEnabled: parsed.data.ENABLE_DEMO_SETUP !== "false",
   isOpenAI: parsed.data.AI_PROVIDER === "openai",
   isHuggingFace: parsed.data.AI_PROVIDER === "huggingface",
+  isNvidia: parsed.data.AI_PROVIDER === "nvidia",
   hasLLM:
     parsed.data.AI_PROVIDER === "openai"
       ? parsed.data.OPENAI_API_KEY.length > 0
-      : parsed.data.HUGGINGFACE_API_KEY.length > 0
+      : parsed.data.AI_PROVIDER === "huggingface"
+        ? parsed.data.HUGGINGFACE_API_KEY.length > 0
+        : parsed.data.NVIDIA_API_KEY.length > 0
 } satisfies Env & {
   isDemoSetupEnabled: boolean;
   isOpenAI: boolean;
   isHuggingFace: boolean;
+  isNvidia: boolean;
   hasLLM: boolean;
 };
 

@@ -34,6 +34,21 @@ describe("rerankEvidence (deterministic RRF)", () => {
     expect(out).toHaveLength(1);
   });
 
+  it("does not double-count graph relationships through matching path items (graph floods would starve document evidence)", () => {
+    // "rel:r1" exists in BOTH graph and paths (path items are derived
+    // duplicates sharing the same id). Before the fix it scored
+    // 0.85/60 + 0.9/60 = 0.0292 and outranked every vector chunk.
+    const out = rerankEvidence({
+      vector: [item("vec0", 0.8)],
+      graph: [item("rel:r1", 0.95)],
+      keyword: [],
+      paths: [item("rel:r1", 0.9)]
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0].id).toBe("vec0"); // vector 1.0/60 > graph 0.85/60
+    expect(out[1].id).toBe("rel:r1");
+  });
+
   it("caps at TOP_K_RERANKED", () => {
     const many = Array.from({ length: 100 }, (_, i) => item(`x${i}`, 0.5));
     const out = rerankEvidence({ vector: many, graph: [], keyword: [], paths: [] });

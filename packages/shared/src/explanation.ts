@@ -15,6 +15,7 @@ export type EvidenceStrength = "HIGH" | "MEDIUM" | "LOW";
 export interface ExplanationQueryInterpretation {
   question: string;
   normalizedQuestion: string;
+  detectedLanguage: string | null;
   queryKind: string;
   detectedEntities: string[];
   searchTerms: string[];

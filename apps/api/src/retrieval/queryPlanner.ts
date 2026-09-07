@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { runQuery } from "../graph/driver.js";
 import { authPredicate } from "../graph/acl.js";
 import { authorizedDocumentIds } from "../access/aclRepository.js";
+import { searchAuthorizedEntities } from "../graph/retrieve.js";
 
 /**
  * Query planning: classify the user's question and produce a validated,
@@ -14,34 +15,50 @@ import { authorizedDocumentIds } from "../access/aclRepository.js";
 const STOPWORDS = new Set([
   "the","a","an","what","which","who","how","why","when","where","do","does","did","is","are","was",
   "be","been","to","of","in","for","on","by","with","and","or","not","about","please","can","you",
-  "explain","tell","me","this","that","these","those","i","my","we","our","their","its","it","have","has","had"
+  "explain","tell","me","this","that","these","those","i","my","we","our","their","its","it","have","has","had",
+  // Hindi/Hinglish stopwords (romanized) - question words, auxiliaries, connectives
+  "kya","kaise","kyun","kyon","kis","kaun","kaunse","kaunsi","kitna","kitne","kab","kahan",
+  "hai","hain","tha","thi","the","ho","hoga","hogi","honge",
+  "se","ke","ki","ka","ko","mein","me","par","pe","ne",
+  "aur","ya","lekin","magar","phir","bhi","sirf","bas",
+  "dikhao","batao","samjhao","bataen","sunao",
+  "sabhi","sab","kuch","koi","har",
+  "ye","yeh","vo","wo","nahi","na","mat",
+  "chahiye","samajh","dekh","bata","bol","aa","ja","le","lo","de","do",
+  "saath","sath","baare","bare"
 ]);
 
 /** Words that break capitalized runs (question stems + connectives). */
 const CUTWORDS = new Set([
   "who","what","which","why","when","where","how","does","do","did","is","are","was","were",
   "the","a","an","and","or","of","to","for","from","at","on","in","by","with","that","this",
-  "his","her","their","our","my","its","me","it"
+  "his","her","their","our","my","its","me","it","show","showme","list","give","tell","find",
+  "get","all","any","every","shown","display","view","give","shown",
+  // Hindi/Hinglish cutwords - words that should break capitalized entity runs
+  "kya","kaise","kyun","kyon","kis","kaun","kaunse","kaunsi","kab","kahan",
+  "hai","hain","tha","thi","se","ke","ki","ka","ko","mein","par",
+  "aur","ya","lekin","phir","bhi","dikhao","batao","samjhao",
+  "saath","baare","related"
 ]);
 
 export function classifyKind(question: string): QueryKind {
   const q = question.toLowerCase();
   if (/\b(compare|comparison|versus|vs\.?|difference between|similarities|differences)\b/.test(q)) return "comparison";
-  if (/\b(how many|count|total|number of|all|list)\b/.test(q)) return "aggregation";
-  if (/\b(who|whom|whose|which department|which person|who owns|who manages|responsible for|chain of|managed by|owned by|reports to)\b/.test(q)) return "relationship_lookup";
-  if (/\b(related to|connected|affects|affect|depends|impacted|mention|connected to|neighborhood|path between)\b/.test(q)) return "multi_hop";
-  if (/\b(what is|what are|define|definition|explain|summarize|describe|policy about)\b/.test(q)) return "hybrid";
-  if (/\b(what|which|where)\b/.test(q)) return "semantic_lookup";
+  if (/\b(how many|count|total|number of|all|list|sabhi)\b/.test(q)) return "aggregation";
+  if (/\b(who|whom|whose|which department|which person|who owns|who manages|responsible for|chain of|managed by|owned by|reports to|kaun|kaunse|kaunsi|kis department)\b/.test(q)) return "relationship_lookup";
+  if (/\b(related to|connected|affects|affect|depends|impacted|mention|connected to|neighborhood|path between|se related|saath kaunse|ke saath)\b/.test(q)) return "multi_hop";
+  if (/\b(what is|what are|define|definition|explain|summarize|describe|policy about|kya hai|kya hain|samjhao|batao)\b/.test(q)) return "hybrid";
+  if (/\b(what|which|where|kya|kahan|kab)\b/.test(q)) return "semantic_lookup";
   return "hybrid";
 }
 
 export function extractSearchTerms(question: string): string[] {
-  const tokens = question
+  const stripped = question
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, " ")
     .split(/\s+/)
     .filter((t) => t.length > 1 && !STOPWORDS.has(t));
-  return Array.from(new Set(tokens)).slice(0, 12);
+  return Array.from(new Set(stripped)).slice(0, 12);
 }
 
 export interface EntityDetection {
@@ -56,18 +73,41 @@ export async function detectEntities(principal: Principal, question: string): Pr
   const authDocs = Array.from(await authorizedDocumentIds(principal));
   if (authDocs.length === 0) return { names: [], normalized: [] };
 
-  const names = extractEntityNameCandidates(question);
-  if (names.length === 0) return { names: [], normalized: [] };
+  const out: string[] = [];
 
-  const rows = await runQuery<{ e: Record<string, unknown> }>(
-    `MATCH (e:Entity {tenantId: $tenantId})
-     WHERE ${authPredicate("e")}
-     AND (toLower(e.name) IN $names OR toLower(e.normalizedName) IN $names)
-     RETURN properties(e) AS e LIMIT 20`,
-    { tenantId, authDocs, names }
-  );
-  const out = rows.map((r) => String((r.e as { name?: unknown }).name ?? ""));
-  return { names: out, normalized: out.map((n) => n.toLowerCase()) };
+  // Phase 1: Exact name match from capitalized-run / quoted candidates.
+  const names = extractEntityNameCandidates(question);
+  if (names.length > 0) {
+    const rows = await runQuery<{ e: Record<string, unknown> }>(
+      `MATCH (e:Entity {tenantId: $tenantId})
+       WHERE ${authPredicate("e")}
+       AND (toLower(e.name) IN $names OR toLower(e.normalizedName) IN $names)
+       RETURN properties(e) AS e LIMIT 20`,
+      { tenantId, authDocs, names }
+    );
+    out.push(...rows.map((r) => String((r.e as { name?: unknown }).name ?? "")));
+  }
+
+  // Phase 2: Fuzzy containment over the significant latin terms. Handles
+  // Devanagari (रिमोट वर्क पॉलिसी क्या है) and lowercase romanized queries
+  // where no proper-noun runs exist, by matching e.name CONTAINS the joined
+  // significant stem terms. searchAuthorizedEntities re-verifies ACL inside.
+  if (out.length === 0) {
+    const coreTerms = extractSearchTerms(question);
+    if (coreTerms.length > 0) {
+      const fuzzyHits = await searchAuthorizedEntities({
+        principal,
+        tenantId,
+        authDocs,
+        query: coreTerms.join(" "),
+        limit: 10
+      });
+      out.push(...fuzzyHits.map((n) => n.name));
+    }
+  }
+
+  const unique = Array.from(new Set(out.filter((n) => n.length > 0)));
+  return { names: unique, normalized: unique.map((n) => n.toLowerCase()) };
 }
 
 export function extractEntityNameCandidates(question: string): string[] {
@@ -231,7 +271,10 @@ export function buildPlan(
   if (maxDepth > config.MAX_GRAPH_DEPTH) validationErrors.push("depth exceeds configured maximum");
 
   const graphEnabled = hasEntityMatch || kind === "relationship_lookup" || kind === "multi_hop";
-  const keywordEnabled = kind === "entity_lookup" || kind === "semantic_lookup" || kind === "aggregation";
+  // Keyword search should always be enabled - it's a fallback that catches
+  // documents whose titles/contents contain the search terms even when
+  // vector or graph retrieval fails for code-mixed / Hinglish queries.
+  const keywordEnabled = true;
   const vectorEnabled = kind === "hybrid" || kind === "semantic_lookup" || kind === "comparison" || kind !== "multi_hop" || true;
 
   return {

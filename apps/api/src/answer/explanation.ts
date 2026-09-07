@@ -15,6 +15,7 @@ import type {
 
 import type { HybridResult } from "../retrieval/hybrid.js";
 import { fusedScores } from "../retrieval/rerank.js";
+import { normalizeQuery } from "../retrieval/normalizeQuery.js";
 
 /**
  * Builds an ACL-aware, observable explanation trace from an already-completed
@@ -38,9 +39,11 @@ export function buildExplanation(input: {
 
   // --- 1. Query interpretation (observable planning only) ---
   const plan = hybrid.plan;
+  const queryLang = normalizeQuery(question);
   const retrievalPlan: ExplanationQueryInterpretation = {
     question,
-    normalizedQuestion: question.trim(),
+    normalizedQuestion: plan.question,
+    detectedLanguage: queryLang.detectedLanguage,
     queryKind: plan.kind,
     detectedEntities: plan.detectedEntities,
     searchTerms: plan.searchTerms,

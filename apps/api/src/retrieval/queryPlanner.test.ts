@@ -61,6 +61,12 @@ describe("extractEntityNameCandidates", () => {
   it("handles quoted entity names", () => {
     expect(extractEntityNameCandidates('Show me the "Executive Compensation Plan"')).toContain("executive compensation plan");
   });
+
+  it("breaks runs on leading guide verbs (Show/List) so the entity is not prefixed", () => {
+    const out = extractEntityNameCandidates("Show Remote Work Policy related to all employees");
+    expect(out).toContain("remote work policy");
+    expect(out.some((c) => c.startsWith("show"))).toBe(false);
+  });
 });
 
 describe("buildPlan", () => {

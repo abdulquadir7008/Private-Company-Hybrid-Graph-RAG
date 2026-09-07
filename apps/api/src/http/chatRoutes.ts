@@ -56,7 +56,7 @@ async function handleChat(
     const resolvedQuestion = await condenseQuestion(question, history);
 
     const hybrid = await hybridRetrieve({ principal: p, question: resolvedQuestion, depth });
-    const grounded = await generateGroundedAnswer({ question: resolvedQuestion, hybrid, history });
+    const grounded = await generateGroundedAnswer({ question, hybrid, history });
 
     // Explainable RAG: build an ACL-aware trace from the SAME retrieval pass.
     // This performs no additional retrieval — it is a pure transform of the

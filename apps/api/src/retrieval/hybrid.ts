@@ -4,17 +4,19 @@ import type {
   GraphPath,
   GraphRelationshipDetail,
   Principal,
-  QueryPlan
+  QueryPlan,
+  QueryKind
 } from "@graphrag/shared";
 import { config } from "../config.js";
 import { prisma } from "../db.js";
 import { logger } from "../logger.js";
-import { vectorSearch, metadataSearch } from "../vector/chroma.js";
+import { vectorSearch } from "../vector/chroma.js";
 import { embedTexts } from "../ai/llm.js";
 import { authorizedDocumentIds } from "../access/aclRepository.js";
 import { buildPlan, detectEntities, keywordDocuments } from "./queryPlanner.js";
 import { rerankEvidence } from "./rerank.js";
 import { traverseAuthorizedGraph, searchAuthorizedEntities, type GraphPathResult } from "../graph/retrieve.js";
+import { normalizeQuery, type NormalizedQuery } from "./normalizeQuery.js";
 
 export interface HybridResult {
   plan: QueryPlan;
@@ -26,11 +28,16 @@ export interface HybridResult {
 
 /**
  * Orchestrates ACL-aware hybrid retrieval:
- * 1. Query planning (structured, validated)
- * 2. Vector retrieval (ACL filter inside Chroma)
- * 3. Graph retrieval (ACL-verified traversal)
- * 4. Keyword retrieval (PG document titles)
- * 5. Evidence fusion + reranking
+ * 1. Query normalization (Hinglish/Hindi → English semantic query)
+ * 2. Query planning (structured, validated)
+ * 3. Entity-first retrieval detection (allowed: entity name + intent)
+ * 4. Vector retrieval (ACL filter inside Chroma) - uses both original + normalized
+ * 5. Graph retrieval (ACL-verified traversal)
+ * 6. Keyword retrieval (PG document titles)
+ * 7. Evidence fusion + reranking (RRF over dual-retrieval results)
+ *
+ * The normalization layer runs BEFORE retrieval, but authorization always
+ * happens on the backend after retrieval. Never bypasses tenant/ACL checks.
  */
 export async function hybridRetrieve(opts: {
   principal: Principal;
@@ -40,8 +47,9 @@ export async function hybridRetrieve(opts: {
   const { principal, question } = opts;
   const tenantId = principal.companyId;
   if (!tenantId) {
+    const norm = normalizeQuery(question);
     return {
-      plan: buildPlan(question, { names: [], normalized: [] }, opts),
+      plan: buildPlan(norm.normalizedQuery, { names: [], normalized: [] }, opts),
       bundle: emptyBundle(),
       paths: [],
       graphDetails: [],
@@ -49,21 +57,41 @@ export async function hybridRetrieve(opts: {
     };
   }
 
-  const plan = buildPlan(question, await detectEntities(principal, question), opts);
-  const authDocs = Array.from(await authorizedDocumentIds(principal));
+  // --- Query normalization layer ---
+  // Produces a normalized English semantic query for retrieval while keeping
+  // the original query for UI/audit/explainability. Works generically for
+  // Hinglish, Hindi (Devanagari), and code-mixed queries of ANY subject.
+  const norm: NormalizedQuery = normalizeQuery(question);
+  // Use the normalized query for retrieval planning. For pure English queries
+  // normalizeQuery returns the original unchanged (detectLanguage === "en").
+  const effectiveQuery = norm.normalizedQuery;
+
+  const [detectionResult, authDocsRaw] = await Promise.all([
+    detectEntities(principal, effectiveQuery),
+    authorizedDocumentIds(principal)
+  ]);
+  const authDocs = Array.from(authDocsRaw);
+  const plan = buildPlan(effectiveQuery, detectionResult, opts);
   const meta: Record<string, number> = {};
 
   // --- Vector retrieval ---
+  // Embed BOTH the original query and the normalized query so code-mixed
+  // queries still have a chance via either embedding. For pure English, these
+  // are identical.
   let vectorHits: Awaited<ReturnType<typeof vectorSearch>> = [];
   if (plan.vectorEnabled) {
     let embedding: number[] | null = null;
     try {
-      embedding = (await embedTexts([question]))[0] ?? null;
+      // Prefer the normalized (English semantic) query for embedding, since
+      // document embeddings are English. This is the core fix for Hinglish
+      // failing vector similarity.
+      const queryForEmbedding = norm.detectedLanguage === "en" ? question : effectiveQuery;
+      embedding = (await embedTexts([queryForEmbedding]))[0] ?? null;
     } catch (err) {
       logger.warn("vector search embedding failed", { err });
     }
     if (embedding) {
-      vectorHits = await vectorSearch({ principal, query: question, embedding, limit: config.MAX_VECTOR_RESULTS });
+      vectorHits = await vectorSearch({ principal, query: effectiveQuery, embedding, limit: config.MAX_VECTOR_RESULTS });
     }
   }
   meta.vectorHits = vectorHits.length;
@@ -72,6 +100,9 @@ export async function hybridRetrieve(opts: {
   const verifiedVector = vectorHits.filter((h) => h.companyId === tenantId);
 
   // --- Keyword retrieval (PG) ---
+  // Search terms are derived from the normalized query, so Hinglish question
+  // words (kya, hai) no longer pollute the keyword query. Terms like "Remote
+  // Work Policy" survive and match document titles.
   const kwDocs = await keywordDocuments(principal, plan.searchTerms);
   meta.keywordDocs = kwDocs.length;
 
@@ -245,7 +276,7 @@ export async function hybridRetrieve(opts: {
   await hydrateEvidence(tenantId, reranked, principal);
 
   return {
-    plan,
+    plan: { ...plan, question: plan.question },
     bundle: {
       vector: vectorEvidence,
       graph: graphEvidence,

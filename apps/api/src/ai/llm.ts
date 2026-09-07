@@ -98,7 +98,7 @@ export async function loadUserEmbeddingConfig(userId: string): Promise<UserLlmCo
 
   const providers = (user.llmConfig as PersistedLlmConfig | null)?.providers ?? {};
   const active = user.activeLlmProvider as LlmProviderId | null;
-  const candidates = [active, "huggingface", "openai", "ollama"]
+  const candidates = [active, "huggingface", "openai", "nvidia", "ollama"]
     .filter((id): id is LlmProviderId => Boolean(id))
     .filter((id, index, ids) => ids.indexOf(id) === index);
 
@@ -246,6 +246,15 @@ function buildProvider(input: LlmProviderInput): LlmProvider {
 function globalInput(): LlmProviderInput {
   if (config.isHuggingFace) {
     return { provider: "huggingface", apiKey: config.HUGGINGFACE_API_KEY, model: config.HUGGINGFACE_CHAT_MODEL, embeddingModel: config.HUGGINGFACE_EMBEDDING_MODEL };
+  }
+  if (config.isNvidia) {
+    return {
+      provider: "nvidia",
+      apiKey: config.NVIDIA_API_KEY,
+      model: config.NVIDIA_CHAT_MODEL,
+      embeddingModel: config.NVIDIA_EMBEDDING_MODEL,
+      baseUrl: config.NVIDIA_BASE_URL
+    };
   }
   return { provider: "openai", apiKey: config.OPENAI_API_KEY, model: config.OPENAI_CHAT_MODEL, embeddingModel: config.OPENAI_EMBEDDING_MODEL };
 }

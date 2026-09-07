@@ -17,7 +17,8 @@ export const LLM_PROVIDER_IDS = [
   "gemini",
   "openai",
   "anthropic",
-  "ollama"
+  "ollama",
+  "nvidia"
 ] as const;
 export type LlmProviderId = (typeof LLM_PROVIDER_IDS)[number];
 
@@ -173,6 +174,24 @@ export const LLM_PROVIDERS: LlmProviderMeta[] = [
       { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite", tier: "freetier", supportsEmbedding: false },
       { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", tier: "freetier", supportsEmbedding: false },
       { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite", tier: "freetier", supportsEmbedding: false }
+    ]
+  },
+  {
+    id: "nvidia",
+    label: "NVIDIA",
+    description: "NVIDIA NIM / NVIDIA API catalog. Multilingual embeddings via open models, OpenAI-compatible endpoint.",
+    tier: "paid",
+    apiKeyLabel: "nvapi-…",
+    apiKeyUrl: "https://org.ngc.nvidia.com/setup/api-key",
+    needsApiKey: true,
+    openAiCompatibleBaseUrl: "https://integrate.api.nvidia.com/v1",
+    supportsEmbedding: true,
+    defaultEmbeddingModel: "nvidia/llama-nemotron-embed-1b-v2",
+    models: [
+      { id: "nvidia/llama-nemotron-embed-1b-v2", name: "NVIDIA Llama Nemotron Embed 1B v2 (multilingual)", tier: "paid", supportsEmbedding: true },
+      { id: "nvidia/llama-nemotron-embed-1b-v1", name: "NVIDIA Llama Nemotron Embed 1B v1", tier: "paid", supportsEmbedding: true },
+      { id: "nvidia/nv-mistralai-minitron-4b-instruct-v3.2", name: "Llama Nemotron / MiniTron 4B (chat)", tier: "paid", supportsEmbedding: false },
+      { id: "meta/llama-3.3-70b-instruct", name: "Llama 3.3 70B (chat)", tier: "paid", supportsEmbedding: false }
     ]
   }
 ];
